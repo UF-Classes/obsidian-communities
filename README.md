@@ -8,6 +8,7 @@
 
 ### Testing the plugin in Obsidian (Windows)
 - Make sure there's a dist folder in the project root directory; it should be generated after running `npm run dev` for the first time.
+- In your Obsidian vault folder, create a "plugins" folder in your ".obsidian" folder if it doesn't already exist.
 - Run a terminal with administrator privileges.
 - `cd` to the project root directory.
 - Run the following command but replace the path in the last argument with the path corresponding with your own Obsidian vault:
