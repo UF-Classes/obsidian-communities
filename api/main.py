@@ -11,6 +11,7 @@ def read_root():
     return {"Hello": "World"}
 
 # Server Stuff that I'm not 100% sure belongs
+# 2 Versions of SQL Alchemy Installed !!!
 
 account_db = sa.create_engine("Accounts")
 account_db_con = account_db.connect()
