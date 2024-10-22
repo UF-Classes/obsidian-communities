@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Webserver" type="Python.FastAPI">
-    <option name="file" value="C:\Users\JL\CodeProjects\UFProjects\obsidian-communities\api\main.py" />
+    <option name="file" value="$PROJECT_DIR$\api\main.py" />
     <module name="obsidian-communities" />
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
