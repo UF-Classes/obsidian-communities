@@ -1,5 +1,5 @@
 import { App, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-
+import { LoginModal } from './modal';
 import "../styles/styles.scss";
 
 export default class Communities extends Plugin {
@@ -10,28 +10,32 @@ export default class Communities extends Plugin {
     onload() {
         console.log('loading plugin');
 
-        this.addRibbonIcon('dice', 'Sample Plugin', () => {
-            new Notice('This is a notice!');
+        this.addRibbonIcon('dice', 'Obsidian-Communities Test', () => {
+            new Notice('In development!');
         });
 
-        this.addStatusBarItem().setText('Status Bar Text');
+        this.addStatusBarItem().setText('Obsidian Communities');
 
         this.addCommand({
-            id: 'open-sample-modal',
-            name: 'Open Sample Modal',
-            // callback: () => {
-            // 	console.log('Simple Callback');
-            // },
+            id: 'login-page',
+            name: 'Login',
+             callback: () => {
+             	new LoginModal(this.app, (result) => {
+                    new Notice(`Hello, ${result}!`);
+                }).open();
+            },
+            /*
             checkCallback: (checking: boolean) => {
                 let leaf = this.app.workspace.activeLeaf;
                 if (leaf) {
                     if (!checking) {
-                        new SampleModal(this.app).open();
+                        new LoginModal(this.app).open();
                     }
                     return true;
                 }
                 return false;
             }
+            */
         });
 
         this.addSettingTab(new SampleSettingTab(this.app, this));
@@ -42,14 +46,47 @@ export default class Communities extends Plugin {
     }
 }
 
-class SampleModal extends Modal {
-    constructor(app: App) {
-        super(app);
-    }
+class LoginModal extends Modal {
+    constructor(app: App, onSubmit: (result: string) => void) {
+    super(app);
+	this.setTitle('Login:');
+
+	let username = '';
+
+	let email = '';
+    new Setting(this.contentEl)
+      .setName('Email Address:')
+      .addText((text) =>
+        text.onChange((value) => {
+          email = value;
+          if(email.indexOf('@') != -1) { username = email.substring(0, email.indexOf('@')); }
+          else {
+            username = email;
+          }
+        }));
+
+    let password = '';
+    new Setting(this.contentEl)
+      .setName('Password:')
+      .addText((text) =>
+        text.onChange((value) => {
+          password = value;
+        }));
+
+    new Setting(this.contentEl)
+      .addButton((btn) =>
+        btn
+          .setButtonText('Login')
+          .setCta()
+          .onClick(() => {
+            this.close();
+            onSubmit(username);
+          }));
+  }
 
     onOpen() {
-        let {contentEl} = this;
-        contentEl.setText('Woah!');
+        //let {contentEl} = this;
+        //contentEl.setText('Woah!');
     }
 
     onClose() {
