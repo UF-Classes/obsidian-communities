@@ -4,7 +4,7 @@ from fastapi_users.authentication import JWTStrategy
 from fastapi_users.db import SQLAlchemyUserDatabase
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from UserModel import User, engine
+from api.UserModel import User, engine
 
 DATABASE_URL = "sqlite+aiosqlite:///./test.db"  # TO DO: Implement DB
 async_engine = create_async_engine(DATABASE_URL, echo=True)
