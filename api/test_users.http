@@ -1,0 +1,144 @@
+### Delete user without authentication
+DELETE http://localhost:8000/api/users?id=test
+Content-Type: application/json
+
+> {%
+    client.test("UserDeleteUnauthorized", function() {
+        client.assert(response.status === 401);
+    });
+ %}
+
+### Login as superuser
+POST http://localhost:8000/auth/login
+Content-Type: application/json
+
+{
+    "username": "admin",
+    "password": "admin"
+}
+
+> {%
+    client.global.set("access_token", response.body["access_token"]);
+    client.test("Admin Login", function() {
+        client.assert(response.status === 200 && response.body["access_token"]);
+    });
+ %}
+
+### Delete user "test"
+DELETE http://localhost:8000/api/users?id=test
+Content-Type: application/json
+Authorization: Bearer {{ access_token }}
+
+> {%
+    client.test("UserDelete", function() {
+        client.assert(response.status === 200 || response.status === 404);
+    });
+ %}
+
+### Delete user "test@example.com"
+DELETE http://localhost:8000/api/users?id=test@example.com
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+> {%
+    client.test("UserDelete", function() {
+        client.assert(response.status === 200 || response.status === 404);
+    });
+ %}
+
+### Non-existent user
+GET http://localhost:8000/api/users/exists?id=test
+Content-Type: application/json
+
+> {%
+    client.test("UserExistsFalse", function() {
+        client.assert(response.status === 200);
+        client.assert(response.body["exists"] === false);
+    });
+ %}
+
+### Create user "test"
+POST http://localhost:8000/api/users
+Content-Type: application/json
+
+{
+    "username": "test",
+    "email": "test@example.com",
+    "password": "test"
+}
+
+> {%
+    client.test("UserCreate", function() {
+        client.assert(response.status === 200);
+    });
+ %}
+
+### Create user with conflicting username
+POST http://localhost:8000/api/users
+Content-Type: application/json
+
+{
+    "username": "test",
+    "email": "something_else@example.com",
+    "password": "test"
+}
+
+> {%
+    client.test("UserCreateConflict", function() {
+        client.assert(response.status === 409);
+    });
+ %}
+
+### Create user with conflicting email
+POST http://localhost:8000/api/users
+Content-Type: application/json
+
+{
+    "username": "something_else",
+    "email": "test@example.com",
+    "password": "test"
+}
+
+> {%
+    client.test("UserCreateConflictEmail", function() {
+        client.assert(response.status === 409);
+    });
+ %}
+
+### Delete existing user "test"
+DELETE http://localhost:8000/api/users?id=test
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+> {%
+    client.test("UserDelete", function() {
+        client.assert(response.status === 200);
+    });
+ %}
+
+### Recreate user "test"
+POST http://localhost:8000/api/users
+Content-Type: application/json
+
+{
+    "username": "test",
+    "email": "test@example.com",
+    "password": "test"
+}
+
+> {%
+    client.test("UserCreate2", function() {
+        client.assert(response.status === 200);
+    });
+ %}
+
+### Delete user "test@example.com"
+DELETE http://localhost:8000/users?id=test@example.com
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+> {%
+    client.test("UserDelete", function() {
+        client.assert(response.status === 200);
+    });
+ %}
