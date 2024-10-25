@@ -1,10 +1,13 @@
+import asyncio
 from typing import AsyncGenerator
 
 from fastapi import Depends
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID, SQLAlchemyUserDatabase
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import DeclarativeMeta, declarative_base
 from sqlalchemy.orm import sessionmaker
+
 
 DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 Base: DeclarativeMeta = declarative_base()
@@ -28,5 +31,15 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+async def get_user_by_email(email : str):
+    async with async_session_maker() as session:
+        async with session.begin():
+            result = await session.execute(select(User).where(User.email == email))
+            return result.fetchone()
+
+
 async def get_user_db(session: AsyncSession = Depends(get_async_session)):
     yield SQLAlchemyUserDatabase(session, User)
+
+
+asyncio.create_task(create_db_and_tables())
