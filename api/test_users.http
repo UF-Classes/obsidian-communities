@@ -1,5 +1,35 @@
+# Only valid for development environment
+@test_email = user@example.com
+@test_id = 0
+@admin_email = admin@example.com
+@admin_pass = admin
+
+### Verify admin user existence
+GET http://localhost:8000/users/exists/{{ admin_email }}
+Content-Type: application/json
+
+> {%
+    client.test("AdminExists", function() {
+        client.assert(response.status === 200);
+        client.assert(response.body["exists"] === true);
+        client.assert(response.body["is_superuser"] === true);
+    });
+ %}
+
+### Check test user existence
+GET http://localhost:8000/users/exists/{{ test_email }}
+Content-Type: application/json
+
+> {%
+    client.global.set("test_id", response.body["id"]);
+    client.test("UserExistsFalse", function() {
+        client.assert(response.status === 200);
+        client.assert(response.body["exists"] !== undefined);
+    });
+ %}
+
 ### Delete user without authentication
-DELETE http://localhost:8000/api/users?id=test
+DELETE http://localhost:8000/users/{{ test_id }}
 Content-Type: application/json
 
 > {%
@@ -9,136 +39,57 @@ Content-Type: application/json
  %}
 
 ### Login as superuser
-POST http://localhost:8000/auth/login
-Content-Type: application/json
+POST http://localhost:8000/auth/jwt/login
+Content-Type: application/x-www-form-urlencoded
 
-{
-    "username": "admin",
-    "password": "admin"
-}
+username={{ admin_email }}&password={{ admin_pass }}
 
 > {%
     client.global.set("access_token", response.body["access_token"]);
     client.test("Admin Login", function() {
         client.assert(response.status === 200 && response.body["access_token"]);
+        client.assert(response.body["token_type"] === "bearer");
     });
  %}
 
-### Delete user "test"
-DELETE http://localhost:8000/api/users?id=test
+### Delete test user
+DELETE http://localhost:8000/users/{{ test_id }}
 Content-Type: application/json
 Authorization: Bearer {{ access_token }}
 
 > {%
     client.test("UserDelete", function() {
-        client.assert(response.status === 200 || response.status === 404);
-    });
- %}
-
-### Delete user "test@example.com"
-DELETE http://localhost:8000/api/users?id=test@example.com
-Content-Type: application/json
-Authorization: Bearer {{access_token}}
-
-> {%
-    client.test("UserDelete", function() {
-        client.assert(response.status === 200 || response.status === 404);
-    });
- %}
-
-### Non-existent user
-GET http://localhost:8000/api/users/exists?id=test
-Content-Type: application/json
-
-> {%
-    client.test("UserExistsFalse", function() {
-        client.assert(response.status === 200);
-        client.assert(response.body["exists"] === false);
+        client.assert(response.status === 204);
     });
  %}
 
 ### Create user "test"
-POST http://localhost:8000/api/users
+POST http://localhost:8000/auth/register
 Content-Type: application/json
 
 {
-    "username": "test",
-    "email": "test@example.com",
-    "password": "test"
+    "email": "{{ test_email }}",
+    "password": "password"
 }
 
 > {%
+    client.global.set("test_id", response.body["id"]);
     client.test("UserCreate", function() {
-        client.assert(response.status === 200);
-    });
- %}
-
-### Create user with conflicting username
-POST http://localhost:8000/api/users
-Content-Type: application/json
-
-{
-    "username": "test",
-    "email": "something_else@example.com",
-    "password": "test"
-}
-
-> {%
-    client.test("UserCreateConflict", function() {
-        client.assert(response.status === 409);
+        client.assert(response.status === 201);
     });
  %}
 
 ### Create user with conflicting email
-POST http://localhost:8000/api/users
+POST http://localhost:8000/auth/register
 Content-Type: application/json
 
 {
-    "username": "something_else",
-    "email": "test@example.com",
-    "password": "test"
+    "email": "{{ test_email }}",
+    "password": "password"
 }
 
 > {%
-    client.test("UserCreateConflictEmail", function() {
-        client.assert(response.status === 409);
-    });
- %}
-
-### Delete existing user "test"
-DELETE http://localhost:8000/api/users?id=test
-Content-Type: application/json
-Authorization: Bearer {{access_token}}
-
-> {%
-    client.test("UserDelete", function() {
-        client.assert(response.status === 200);
-    });
- %}
-
-### Recreate user "test"
-POST http://localhost:8000/api/users
-Content-Type: application/json
-
-{
-    "username": "test",
-    "email": "test@example.com",
-    "password": "test"
-}
-
-> {%
-    client.test("UserCreate2", function() {
-        client.assert(response.status === 200);
-    });
- %}
-
-### Delete user "test@example.com"
-DELETE http://localhost:8000/users?id=test@example.com
-Content-Type: application/json
-Authorization: Bearer {{access_token}}
-
-> {%
-    client.test("UserDelete", function() {
-        client.assert(response.status === 200);
+    client.test("UserCreateConflict", function() {
+        client.assert(response.status === 400);
     });
  %}
