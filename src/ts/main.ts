@@ -38,6 +38,14 @@ export default class Communities extends Plugin {
             */
         });
 
+        this.addCommand({
+            id: 'register-page',
+            name: 'Register',
+             callback: () => {
+             	new RegisterModal(this.app).open();
+            },
+        });
+
         this.addSettingTab(new SampleSettingTab(this.app, this));
     }
 
@@ -56,28 +64,32 @@ class LoginModal extends Modal {
         this.setTitle('Login:');
 
         new Setting(this.contentEl)
-          .setName('Email Address:')
-          .addText((text) =>
-            text.onChange((value) => {
-              this.email = value;
-            }
-          )
+            .setName('Email Address:')
+            .addText((text) =>
+                text.onChange((value) => {
+                    this.email = value;
+                }
+            )
         );
 
         new Setting(this.contentEl)
-          .addButton((btn) =>
-            btn
-              .setButtonText('Login')
-              .setCta()
-              .onClick(() => {
-                this.onSubmit();
-              }));
+            .addButton((btn) =>
+                btn
+                    .setButtonText('Login')
+                    .setCta()
+                    .onClick(() => {
+                        if(this.email != "" && this.email.indexOf("@") != -1) {
+                            this.onSubmit();
+                        } else {
+                            new Notice("Invalid Email Address");
+                        }
+                    })
+            );
     }
 
     onSubmit() {
         console.log("submitted successfully");
         if(!this.passwordFieldEnabled) {
-            console.log("submitted successfully part 2");
             fetch(`http://127.0.0.1:8000/users/exists/${this.email}`, {
 
                 headers: {
@@ -86,17 +98,17 @@ class LoginModal extends Modal {
                 .then(res => res.json())
                 .then(data => {console.log(data)
 
-              if(data["exists"]) {
-                new Setting(this.contentEl)
-                  .setName('Password:')
-                  .addText((text) =>
-                    text.onChange((value) => {
-                    this.password = value;
+                if(data["exists"]) {
+                    new Setting(this.contentEl)
+                    .setName('Password:')
+                    .addText((text) =>
+                        text.onChange((value) => {
+                            this.password = value;
                   }));
                 this.passwordFieldEnabled = true;
-              } else {
-                new Notice("User does not exist");
-              }
+                } else {
+                    new Notice("User does not exist");
+                }
             })
         } else {
             fetch('http://127.0.0.1:8000/auth/jwt/login', {
@@ -119,6 +131,97 @@ class LoginModal extends Modal {
                 this.onLogin();
                 this.close();
             }
+
+            })
+        }
+    }
+
+    onLogin() {
+
+    }
+
+    onOpen() {
+        //let {contentEl} = this;
+        //contentEl.setText('Woah!');
+    }
+
+    onClose() {
+        let {contentEl} = this;
+        contentEl.empty();
+    }
+}
+
+class RegisterModal extends Modal {
+    email: string = "";
+    password: string = "";
+    passwordFieldEnabled: boolean = false;
+
+    constructor(app: App) {
+        super(app);
+        this.setTitle('Register:');
+
+        new Setting(this.contentEl)
+            .setName('Email Address:')
+            .addText((text) =>
+                text.onChange((value) => {
+                    this.email = value;
+                }
+            )
+        );
+
+        new Setting(this.contentEl)
+            .addButton((btn) =>
+                btn
+                    .setButtonText('Submit')
+                    .setCta()
+                    .onClick(() => {
+                        if(this.email != "" && this.email.indexOf("@") != -1) {
+                            this.onSubmit();
+                        } else {
+                            new Notice("Invalid Email Address");
+                        }
+                    })
+            );
+    }
+
+    onSubmit() {
+        console.log("submitted successfully");
+        if(!this.passwordFieldEnabled) {
+
+            new Setting(this.contentEl)
+                .setName('Password:')
+                .addText((text) =>
+                text.onChange((value) => {
+                    this.password = value;
+                }));
+                this.passwordFieldEnabled = true;
+        } else {
+            fetch('http://127.0.0.1:8000/auth/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json;charset=utf-8'
+                },
+                body: JSON.stringify(
+                {
+                    "email": this.email,
+                    "password": this.password
+                })
+            })
+            .then(res => res.json())
+            .then(data => {console.log(data)
+
+                if(data["detail"]) {
+                    if(data["detail"] == "REGISTER_USER_ALREADY_EXISTS") {
+                        new Notice("User already exists");
+                    } else {
+                        new Notice("Invalid Password (Password must be at least 3 characters)");
+                    }
+                } else {
+                    accessToken = data["access_token"];
+
+                    this.onLogin();
+                    this.close();
+                }
 
             })
         }
