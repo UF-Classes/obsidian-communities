@@ -63,7 +63,7 @@ Authorization: Bearer {{ access_token }}
     });
  %}
 
-### Create user "test"
+### Create test user
 POST http://localhost:8000/auth/register
 Content-Type: application/json
 
