@@ -1,8 +1,10 @@
 import { App, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import { LoginModal } from './modal';
 import "../styles/styles.scss";
 
+let accessToken: string = "";
+
 export default class Communities extends Plugin {
+
     onInit() {
 
     }
@@ -20,9 +22,7 @@ export default class Communities extends Plugin {
             id: 'login-page',
             name: 'Login',
              callback: () => {
-             	new LoginModal(this.app, (result) => {
-                    new Notice(`Hello, ${result}!`);
-                }).open();
+             	new LoginModal(this.app).open();
             },
             /*
             checkCallback: (checking: boolean) => {
@@ -47,42 +47,86 @@ export default class Communities extends Plugin {
 }
 
 class LoginModal extends Modal {
-    constructor(app: App, onSubmit: (result: string) => void) {
-    super(app);
-	this.setTitle('Login:');
+    email: string = "";
+    password: string = "";
+    passwordFieldEnabled: boolean = false;
 
-	let username = '';
+    constructor(app: App) {
+        super(app);
+        this.setTitle('Login:');
 
-	let email = '';
-    new Setting(this.contentEl)
-      .setName('Email Address:')
-      .addText((text) =>
-        text.onChange((value) => {
-          email = value;
-          if(email.indexOf('@') != -1) { username = email.substring(0, email.indexOf('@')); }
-          else {
-            username = email;
-          }
-        }));
+        new Setting(this.contentEl)
+          .setName('Email Address:')
+          .addText((text) =>
+            text.onChange((value) => {
+              this.email = value;
+            }
+          )
+        );
 
-    let password = '';
-    new Setting(this.contentEl)
-      .setName('Password:')
-      .addText((text) =>
-        text.onChange((value) => {
-          password = value;
-        }));
+        new Setting(this.contentEl)
+          .addButton((btn) =>
+            btn
+              .setButtonText('Login')
+              .setCta()
+              .onClick(() => {
+                this.onSubmit();
+              }));
+    }
 
-    new Setting(this.contentEl)
-      .addButton((btn) =>
-        btn
-          .setButtonText('Login')
-          .setCta()
-          .onClick(() => {
-            this.close();
-            onSubmit(username);
-          }));
-  }
+    onSubmit() {
+        console.log("submitted successfully");
+        if(!this.passwordFieldEnabled) {
+            console.log("submitted successfully part 2");
+            fetch(`http://127.0.0.1:8000/users/exists/${this.email}`, {
+
+                headers: {
+                    'Content-Type': 'application/json;charset=utf-8'
+                }})
+                .then(res => res.json())
+                .then(data => {console.log(data)
+
+              if(data["exists"]) {
+                new Setting(this.contentEl)
+                  .setName('Password:')
+                  .addText((text) =>
+                    text.onChange((value) => {
+                    this.password = value;
+                  }));
+                this.passwordFieldEnabled = true;
+              } else {
+                new Notice("User does not exist");
+              }
+            })
+        } else {
+            fetch('http://127.0.0.1:8000/auth/jwt/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `username=${this.email}&password=${this.password}`})
+                .then(res => res.json())
+                .then(data => {console.log(data)
+
+            if(data["detail"]) {
+                if(data["detail"] == "LOGIN_BAD_CREDENTIALS") {
+                    new Notice("Invalid Credentials");
+                } else if(data["detail"] == "LOGIN_USER_NOT_VERIFIED") {
+                    new Notice("User not verified");
+                }
+            } else {
+                accessToken = data["access_token"];
+                this.onLogin();
+                this.close();
+            }
+
+            })
+        }
+    }
+
+    onLogin() {
+
+    }
 
     onOpen() {
         //let {contentEl} = this;
