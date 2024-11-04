@@ -58,12 +58,15 @@ class LoginModal extends Modal {
     email: string = "";
     password: string = "";
     passwordFieldEnabled: boolean = false;
+    fieldsEl: HTMLElement;
 
     constructor(app: App) {
         super(app);
         this.setTitle('Login:');
 
-        new Setting(this.contentEl)
+        this.fieldsEl = this.containerEl.querySelector(".modal").createEl('div', { cls: 'fields' });
+
+        new Setting(this.fieldsEl)
             .setName('Email Address:')
             .addText((text) =>
                 text.onChange((value) => {
@@ -72,7 +75,7 @@ class LoginModal extends Modal {
             )
         );
 
-        new Setting(this.contentEl)
+        new Setting(this.containerEl.querySelector(".modal"))
             .addButton((btn) =>
                 btn
                     .setButtonText('Login')
@@ -99,7 +102,7 @@ class LoginModal extends Modal {
                 .then(data => {console.log(data)
 
                 if(data["exists"]) {
-                    new Setting(this.contentEl)
+                    new Setting(this.fieldsEl)
                     .setName('Password:')
                     .addText((text) =>
                         text.onChange((value) => {
@@ -137,7 +140,7 @@ class LoginModal extends Modal {
     }
 
     onLogin() {
-
+        //this.app.addStatusBarItem().setText("Currently Logged in as: " + this.email.substring(0, this.email.indexOf("@")));
     }
 
     onOpen() {
@@ -155,12 +158,15 @@ class RegisterModal extends Modal {
     email: string = "";
     password: string = "";
     passwordFieldEnabled: boolean = false;
+    fieldsEl: HTMLElement;
 
     constructor(app: App) {
         super(app);
         this.setTitle('Register:');
 
-        new Setting(this.contentEl)
+        this.fieldsEl = this.containerEl.querySelector(".modal").createEl('div', { cls: 'fields' });
+
+        new Setting(this.fieldsEl)
             .setName('Email Address:')
             .addText((text) =>
                 text.onChange((value) => {
@@ -169,7 +175,7 @@ class RegisterModal extends Modal {
             )
         );
 
-        new Setting(this.contentEl)
+        new Setting(this.containerEl.querySelector(".modal"))
             .addButton((btn) =>
                 btn
                     .setButtonText('Submit')
@@ -187,14 +193,26 @@ class RegisterModal extends Modal {
     onSubmit() {
         console.log("submitted successfully");
         if(!this.passwordFieldEnabled) {
+            fetch(`http://127.0.0.1:8000/users/exists/${this.email}`, {
+                method: "GET",
+                headers: {
+                    'Content-Type': 'application/json;charset=utf-8'
+                }})
+                .then(res => res.json())
+                .then(data => {console.log(data)
 
-            new Setting(this.contentEl)
-                .setName('Password:')
-                .addText((text) =>
-                text.onChange((value) => {
-                    this.password = value;
-                }));
-                this.passwordFieldEnabled = true;
+                if(!data["exists"]) {
+                    new Setting(this.fieldsEl)
+                    .setName('Password:')
+                    .addText((text) =>
+                        text.onChange((value) => {
+                            this.password = value;
+                    }));
+                    this.passwordFieldEnabled = true;
+                } else {
+                    new Notice("User already exists");
+                }
+            })
         } else {
             fetch('http://127.0.0.1:8000/auth/register', {
                 method: 'POST',
@@ -222,7 +240,6 @@ class RegisterModal extends Modal {
                     this.onLogin();
                     this.close();
                 }
-
             })
         }
     }
