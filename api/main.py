@@ -1,8 +1,15 @@
+import uuid
+
+from fastapi.params import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.cors import CORSMiddleware
 
+from api import users
 from api.app import app
+from api.db import Community, User
 from api.schemas import UserRead, UserCreate, UserUpdate
-from api.users import fastapi_users, auth_backend, get_user_by_email
+from api.users import fastapi_users, auth_backend, get_user_by_email, current_active_user
+
 
 origins = [
     "*"
@@ -49,8 +56,60 @@ app.include_router(
 def read_root():
     return {"Hello": "World"}
 
+@app.post("/communities/create/{community_name}")
+async def create_community(community_name: str, user: User = Depends(current_active_user)):
+    community_id = await users.create_community(community_name, user)
+    return {"community_id": community_id}
 
-# Email
+@app.post("/communities/is_owner/{community_id}")
+async def is_owner(community_id: uuid.UUID, user: User = Depends(current_active_user)):
+    result = await users.is_community_owner(user, community_id)
+    return {"is_owner": result}
+
+@app.post("/communities/is_member/{community_id}")
+async def is_member(community_id: uuid.UUID, user: User = Depends(current_active_user)):
+    result = await users.is_community_member(user, community_id)
+    return {"is_member": result}
+
+@app.post("/communities/change_owner/{community_id}")
+async def change_owner(community_id: uuid.UUID, new_owner_id: uuid.UUID, user: User = Depends(current_active_user)):
+    result = await users.change_community_owner(user, community_id, new_owner_id)
+    if result.get("error"):
+        return result
+    else:
+        return {"message": f"Community owner changed to {new_owner_id}"}
+
+@app.post("/communities/update_description/{community_id}/{description}")
+async def change_description(community_id: uuid.UUID, description: str, user: User = Depends(current_active_user)):
+    result = await users.update_community_description(user, community_id, description)
+    if result.get("error"):
+        return result
+    else:
+        return {"message": f"Community description changed to {description}"}
+
+@app.post("/communities/change_name/{community_id}/{new_name}")
+async def change_name(community_id: uuid.UUID, new_name: str, user: User = Depends(current_active_user)):
+    result = await users.change_community_name(user, community_id, new_name)
+    if result.get("error"):
+        return result
+    else:
+        return {"message": f"Community name changed to {new_name}"}
+
+@app.post("/communities/join/{community_id}")
+async def join_community(community_id: uuid.UUID, user: User = Depends(current_active_user)):
+    result = await users.add_user_to_community(user, community_id)
+    if result.get("error"):
+        return result
+
+    return {"message": f"User {user.email} joined the community"}
+
+@app.post("/communities/post/note/{community_id}/{note}")
+async def post_note(community_id: uuid.UUID, note: str, user: User = Depends(current_active_user)):
+    result = await users.post_community_note(user, community_id, note)
+    if result.get("error"):
+        return result
+
+    return {"message": f"Note posted to community {community_id}"}
 @app.get("/users/exists/{user_email}")  # Make sure no repeats
 async def create_user(user_email: str):
     matching_users = await get_user_by_email(user_email)
@@ -66,10 +125,4 @@ async def create_user(user_email: str):
             "is_superuser": user.is_superuser,
         }
 
-# HTTP Methods
-# POST
-# GET
-# PUT
-# DELETE
 
-# login --> check if admin
