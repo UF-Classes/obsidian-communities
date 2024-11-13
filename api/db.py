@@ -2,12 +2,13 @@ import os
 import uuid
 from typing import AsyncGenerator, List
 
-from fastapi import Depends
+from fastapi import Depends, File
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID, SQLAlchemyUserDatabase
-from sqlalchemy import Column, String, UUID, ARRAY, Integer, Table, ForeignKey
+from sqlalchemy import Column, String, UUID, ARRAY, Integer, Table, ForeignKey, LargeBinary, VARBINARY
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import DeclarativeMeta, declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Mapped
+from sqlalchemy.sql.annotation import Annotated
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
 Base: DeclarativeMeta = declarative_base()
@@ -23,6 +24,8 @@ communities_table = Table(
    Column("community_id", UUID, ForeignKey("communities.id"), primary_key=True),
 )
 
+
+
 class User(SQLAlchemyBaseUserTableUUID, Base):
     communities = relationship("Community", secondary="user_communities", back_populates="members")
 
@@ -34,6 +37,18 @@ class Community(Base):
     owner = Column(UUID, ForeignKey("user.id"))
     description = Column(String, nullable=True)
 
+class SharedNoteGroup(Base):
+    __tablename__ = "shared_note_groups"
+    id = Column(UUID, primary_key=True, index=True, default=uuid.uuid4)
+    community_id = Column(UUID, ForeignKey("communities.id"))
+    name = Column(String, nullable=True)
+
+class Note(Base):
+    __tablename__ = "notes"
+    id = Column(UUID, primary_key=True, index=True, default=uuid.uuid4)
+    shared_id = Column(UUID, ForeignKey("shared_note_groups.id"))
+    user_id = Column(UUID, ForeignKey("user.id"))
+    content = Column(VARBINARY, nullable=False)   # LargeBinary is for storing files
 
 
 

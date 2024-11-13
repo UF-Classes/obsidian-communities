@@ -2,6 +2,7 @@ import uuid
 
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.annotation import Annotated
 from starlette.middleware.cors import CORSMiddleware
 
 from api import users
@@ -9,6 +10,7 @@ from api.app import app
 from api.db import Community, User
 from api.schemas import UserRead, UserCreate, UserUpdate
 from api.users import fastapi_users, auth_backend, get_user_by_email, current_active_user
+from fastapi import File, UploadFile
 
 
 origins = [
@@ -110,6 +112,20 @@ async def post_note(community_id: uuid.UUID, note: str, user: User = Depends(cur
         return result
 
     return {"message": f"Note posted to community {community_id}"}
+
+@app.post("/community/{community_id}/shared-notes")   # Content-Type: multipart/form-data
+async def create_file(community_id: uuid.UUID, files: list[UploadFile], user: User = Depends(current_active_user)):
+    await users.post_community_note(user, community_id, files)
+    return {"file_size": len(await files[0].read())}
+
+@app.get("/community/{community_id}/shared-notes")
+async def get_files(community_id: uuid.UUID, user: User = Depends(current_active_user)):
+    notes = await users.get_community_notes(user, community_id)
+    return {"notes": notes}
+
+# ZIP IT
+
+
 @app.get("/users/exists/{user_email}")  # Make sure no repeats
 async def create_user(user_email: str):
     matching_users = await get_user_by_email(user_email)
@@ -124,5 +140,3 @@ async def create_user(user_email: str):
             "is_verified": user.is_verified,
             "is_superuser": user.is_superuser,
         }
-
-

@@ -3,7 +3,7 @@ import contextlib
 import uuid
 from typing import Optional
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, File, UploadFile
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
 from fastapi_users.authentication import (
     AuthenticationBackend,
@@ -13,10 +13,11 @@ from fastapi_users.authentication import (
 from fastapi_users.db import SQLAlchemyUserDatabase
 from fastapi_users.exceptions import UserAlreadyExists
 from sqlalchemy import select
+from sqlalchemy.sql.annotation import Annotated
 
 from api.app import is_production
 from api.db import User, get_user_db, create_db_and_tables, async_session_maker, get_async_session, Community, \
-    communities_table
+    communities_table, Note, SharedNoteGroup
 from api.schemas import UserCreate
 
 SECRET = "SECRET"
@@ -170,6 +171,41 @@ async def change_community_owner(user: User, community_id: uuid.UUID, new_owner_
         community.owner = new_owner_id
         await session.commit()
         return {"message": "Community owner changed"}
+
+async def post_community_note(user: User, community_id: uuid.UUID, note: list[UploadFile]):
+    async with get_async_session_context() as session:
+        community = await session.get(Community, community_id)
+
+        if community is None:
+            return {"error": "Community not found"}
+        if not await is_community_member(user, community_id):
+            return {"error": "User is not a member of the community"}
+
+        shared_note = SharedNoteGroup(community_id=community_id)
+        session.add(shared_note)
+
+        for file in note:
+            content = await file.read()
+            note = Note(user_id=user.id, shared_id=shared_note.id, content=content)
+            session.add(note)
+
+        await session.commit()
+        return {"message": "Note posted"}
+
+
+async def get_community_notes(user: User, community_id: uuid.UUID):
+    async with get_async_session_context() as session:
+        community = await session.get(Community, community_id)
+
+        if community is None:
+            return {"error": "Community not found"}
+        if not await is_community_member(user, community_id):
+            return {"error": "User is not a member of the community"}
+
+        result = await session.execute(
+            select(Note).where(Note.shared_id == SharedNoteGroup.id)
+        )
+        return result.fetchall()
 
 async def setup_db():
     await create_db_and_tables()
