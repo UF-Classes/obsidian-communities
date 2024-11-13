@@ -1,22 +1,45 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, ItemView, WorkspaceLeaf } from 'obsidian';
 import "../styles/styles.scss";
+// Hub, VIEW_TYPE_HUB;
 
 let accessToken: string = "";
 
+const VIEW_TYPE_HUB = 'hub-view';
+
 export default class Communities extends Plugin {
 
-    onInit() {
+    static instance: Communities;
+    email: string;
+    loginStatusEl: HTMLElement;
 
+    static getInstance(): Communities {
+        return Communities.instance;
+    }
+
+    setEmail(email: string) {
+        this.email = email;
     }
 
     onload() {
+        Communities.instance = this;
+        this.email = "Not logged in";
+
         console.log('loading plugin');
 
-        this.addRibbonIcon('dice', 'Obsidian-Communities Test', () => {
-            new Notice('In development!');
+        this.registerView(
+            VIEW_TYPE_HUB,
+            (leaf) => new Hub(leaf)
+        );
+
+        this.addRibbonIcon('vault', 'Obsidian-Communities-Hub', () => {
+            this.activateView();
         });
 
         this.addStatusBarItem().setText('Obsidian Communities');
+
+        this.loginStatusEl = this.addStatusBarItem();
+
+        this.loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
 
         this.addCommand({
             id: 'login-page',
@@ -41,8 +64,26 @@ export default class Communities extends Plugin {
         this.addCommand({
             id: 'register-page',
             name: 'Register',
-             callback: () => {
-             	new RegisterModal(this.app).open();
+            callback: () => {
+                new RegisterModal(this.app).open();
+            },
+        });
+
+        this.addCommand({
+            id: 'log-out',
+            name: 'Logout',
+            callback: () => {
+                fetch('http://127.0.0.1:8000/auth/jwt/logout', { method: 'POST', })
+                    .then((res) => {
+                        if(res.status == 401) {
+                            new Notice("User not verified");
+                        } else if(res.status == 204) {
+                            new Notice("Successfully Logged out");
+                            this.setEmail("Not logged in");
+                            this.loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
+                        }
+                        return res.json()
+                    });
             },
         });
 
@@ -51,6 +92,64 @@ export default class Communities extends Plugin {
 
     onunload() {
         console.log('unloading plugin');
+    }
+    /*
+    async getDisplayCredentials(): string {
+        fetch(`http://127.0.0.1:8000/users/exists/${this.email}`, {
+            method: "GET",
+            headers: {
+                'Content-Type': 'application/json;charset=utf-8'
+            }})
+            .then(res => res.json())
+            .then(data => {console.log(data)
+
+
+        })
+    }
+    */
+
+    async activateView() {
+        const { workspace } = this.app;
+
+        let leaf: WorkspaceLeaf | null = null;
+        const leaves = workspace.getLeavesOfType(VIEW_TYPE_HUB);
+
+        if (leaves.length > 0) {
+            // A leaf with our view already exists, use that
+            leaf = leaves[0];
+        } else {
+            // Our view could not be found in the workspace, create a new leaf
+            // in the right sidebar for it
+            leaf = workspace.getRightLeaf(false);
+            await leaf.setViewState({ type: VIEW_TYPE_HUB, active: true });
+        }
+
+        // "Reveal" the leaf in case it is in a collapsed sidebar
+        workspace.revealLeaf(leaf);
+    }
+}
+
+class Hub extends ItemView {
+    constructor(leaf: WorkspaceLeaf) {
+        super(leaf);
+    }
+
+    getViewType() {
+        return VIEW_TYPE_HUB;
+    }
+
+    getDisplayText() {
+        return 'Example view';
+    }
+
+    async onOpen() {
+        const container = this.containerEl.children[1];
+        container.empty();
+        container.createEl('h4', { text: 'Example view' });
+    }
+
+    async onClose() {
+        // Nothing to clean up.
     }
 }
 
@@ -131,6 +230,8 @@ class LoginModal extends Modal {
                 }
             } else {
                 accessToken = data["access_token"];
+                Communities.getInstance().setEmail(this.email);
+                Communities.getInstance().loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
                 this.onLogin();
                 this.close();
             }
