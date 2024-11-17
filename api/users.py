@@ -1,9 +1,12 @@
 import asyncio
 import contextlib
+import io
+import os
 import uuid
 from typing import Optional
+import zipfile
 
-from fastapi import Depends, Request, File, UploadFile
+from fastapi import Depends, Request, File, UploadFile, Response
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
 from fastapi_users.authentication import (
     AuthenticationBackend,
@@ -183,11 +186,14 @@ async def post_community_note(user: User, community_id: uuid.UUID, note: list[Up
 
         shared_note = SharedNoteGroup(community_id=community_id)
         session.add(shared_note)
+        await session.commit()
 
         for file in note:
             content = await file.read()
             note = Note(user_id=user.id, shared_id=shared_note.id, content=content)
             session.add(note)
+
+
 
         await session.commit()
         return {"message": "Note posted"}
@@ -202,10 +208,40 @@ async def get_community_notes(user: User, community_id: uuid.UUID):
         if not await is_community_member(user, community_id):
             return {"error": "User is not a member of the community"}
 
-        result = await session.execute(
-            select(Note).where(Note.shared_id == SharedNoteGroup.id)
+        group_notes = await session.execute(
+            select(SharedNoteGroup).filter_by(community_id=community_id)
         )
-        return result.fetchall()
+        group_notes = group_notes.fetchall()
+
+        notes = []
+        for group in group_notes:
+            group_notes_result = await session.execute(
+                select(Note).filter_by(shared_id=group.SharedNoteGroup.id)
+            )
+            notes += [note._asdict() for note in group_notes_result.fetchall()]
+
+        return notes
+
+async def zipfiles(notes):
+    zip_filename = "Archive.zip"
+
+    s = io.BytesIO()
+    zf = zipfile.ZipFile(s, "w")
+
+    for note in notes:
+        note_obj = note['Note']
+        note_id = note_obj.id
+        content = note_obj.content
+        zf.writestr(f"{note_id}.txt", content)
+
+    zf.close()
+
+    resp = Response(s.getvalue(), media_type="application/x-zip-compressed", headers={
+        'Content-Disposition': f'attachment;filename={zip_filename}'
+    })
+
+    return resp
+
 
 async def setup_db():
     await create_db_and_tables()

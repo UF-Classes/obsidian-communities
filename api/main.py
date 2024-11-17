@@ -1,5 +1,8 @@
+import io
 import uuid
+import zipfile
 
+from fastapi.openapi.models import Response
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.annotation import Annotated
@@ -9,7 +12,7 @@ from api import users
 from api.app import app
 from api.db import Community, User
 from api.schemas import UserRead, UserCreate, UserUpdate
-from api.users import fastapi_users, auth_backend, get_user_by_email, current_active_user
+from api.users import fastapi_users, auth_backend, get_user_by_email, current_active_user, zipfiles
 from fastapi import File, UploadFile
 
 
@@ -52,6 +55,10 @@ app.include_router(
     prefix="/users",
     tags=["users"],
 )
+
+
+
+
 
 
 @app.get("/")
@@ -121,12 +128,9 @@ async def create_file(community_id: uuid.UUID, files: list[UploadFile], user: Us
 @app.get("/community/{community_id}/shared-notes")
 async def get_files(community_id: uuid.UUID, user: User = Depends(current_active_user)):
     notes = await users.get_community_notes(user, community_id)
-    return {"notes": notes}
+    return await users.zipfiles(notes)
 
-# ZIP IT
-
-
-@app.get("/users/exists/{user_email}")  # Make sure no repeats
+@app.get("/users/exists/{user_email}")
 async def create_user(user_email: str):
     matching_users = await get_user_by_email(user_email)
     if matching_users is None:
