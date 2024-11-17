@@ -120,7 +120,7 @@ async def post_note(community_id: uuid.UUID, note: str, user: User = Depends(cur
 
     return {"message": f"Note posted to community {community_id}"}
 
-@app.post("/community/{community_id}/shared-notes")   # Content-Type: multipart/form-data
+@app.post("/community/{community_id}/shared-notes")
 async def create_file(community_id: uuid.UUID, files: list[UploadFile], user: User = Depends(current_active_user)):
     await users.post_community_note(user, community_id, files)
     return {"file_size": len(await files[0].read())}
@@ -129,6 +129,16 @@ async def create_file(community_id: uuid.UUID, files: list[UploadFile], user: Us
 async def get_files(community_id: uuid.UUID, user: User = Depends(current_active_user)):
     notes = await users.get_community_notes(user, community_id)
     return await users.zipfiles(notes)
+
+@app.get("/community/{community_id}/shared-notes/{note_group_id}")
+async def get_file(community_id: uuid.UUID, note_group_id: uuid.UUID):
+    notes = await users.get_note_by_id(community_id, note_group_id)
+    return await users.zipfiles(notes)
+
+@app.put("/community/{community_id}/shared-notes/{file-group-id}")
+async def edit_note(note_ids: list[uuid.UUID], files: list[UploadFile], community_id: uuid.UUID, file_group_id: uuid.UUID, user: User = Depends(current_active_user)):
+    await users.edit_notes(note_ids, files, community_id, file_group_id, user)
+
 
 @app.get("/users/exists/{user_email}")
 async def create_user(user_email: str):

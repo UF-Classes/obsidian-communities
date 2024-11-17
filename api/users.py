@@ -222,6 +222,45 @@ async def get_community_notes(user: User, community_id: uuid.UUID):
 
         return notes
 
+async def get_note_by_id(community_id: uuid.UUID, note_group_id: uuid.UUID):
+    async with get_async_session_context() as session:
+
+        group_notes = await session.execute(
+            select(SharedNoteGroup).filter_by(community_id=community_id, id=note_group_id)
+        )
+        group_notes = group_notes.fetchall()
+
+        notes = []
+        for group in group_notes:
+            notes_result = await session.execute(
+                select(Note).filter_by(shared_id=note_group_id)
+            )
+            notes += [note._asdict() for note in notes_result.fetchall()]
+
+
+        return notes
+
+async def edit_notes(note_ids: list[uuid.UUID], files: list[UploadFile], community_id: uuid.UUID, file_group_id: uuid.UUID, user: User):
+    async with get_async_session_context() as session:
+        # Delete note_ids
+        # Add files
+        group_notes = await session.execute(
+            select(SharedNoteGroup).filter_by(community_id=community_id, id=file_group_id)
+        )
+        group_notes = group_notes.fetchall()
+
+        for note_id in note_ids:
+            note = await session.get(Note, note_id)
+            session.delete(note)
+
+        for file in files:
+            await post_community_note(user, community_id, [file])
+
+        await session.commit()
+
+
+        return {"message": "Notes updated"}
+
 async def zipfiles(notes):
     zip_filename = "Archive.zip"
 
