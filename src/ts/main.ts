@@ -9,6 +9,7 @@ const VIEW_TYPE_HUB = 'hub-view';
 export default class Communities extends Plugin {
 
     static instance: Communities;
+    accToken: string;
     email: string;
     loginStatusEl: HTMLElement;
 
@@ -18,6 +19,10 @@ export default class Communities extends Plugin {
 
     setEmail(email: string) {
         this.email = email;
+    }
+
+    setAccToken(accToken: string) {
+        this.accToken = accToken;
     }
 
     onload() {
@@ -62,6 +67,14 @@ export default class Communities extends Plugin {
         });
 
         this.addCommand({
+            id: 'create-community-page',
+            name: 'Create Community',
+            callback: () => {
+                new CreateCommunityModal(this.app).open();
+            },
+        });
+
+        this.addCommand({
             id: 'register-page',
             name: 'Register',
             callback: () => {
@@ -70,10 +83,25 @@ export default class Communities extends Plugin {
         });
 
         this.addCommand({
+            /*
+            fetch('http://127.0.0.1:8000/auth/jwt/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `username=${this.email}&password=${this.password}`})
+                .then(res => res.json())
+                .then(data => {console.log(data)
+            */
             id: 'log-out',
             name: 'Logout',
             callback: () => {
-                fetch('http://127.0.0.1:8000/auth/jwt/logout', { method: 'POST', })
+                fetch('http://127.0.0.1:8000/auth/jwt/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json;charset=utf-8',
+                        'Authorization': `Bearer ${this.accToken}`
+                    }})
                     .then((res) => {
                         if(res.status == 401) {
                             new Notice("User not verified");
@@ -82,9 +110,9 @@ export default class Communities extends Plugin {
                             this.setEmail("Not logged in");
                             this.loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
                         }
-                        return res.json()
+                        return res.json();
                     });
-            },
+            }
         });
 
         this.addSettingTab(new SampleSettingTab(this.app, this));
@@ -139,13 +167,14 @@ class Hub extends ItemView {
     }
 
     getDisplayText() {
-        return 'Example view';
+        return 'Obsidian Communities Hub';
     }
 
     async onOpen() {
         const container = this.containerEl.children[1];
         container.empty();
-        container.createEl('h4', { text: 'Example view' });
+        container.createEl('h4', { text: 'Obsidian Communities Hub' });
+        container.createEl('button', { text: 'Login' });
     }
 
     async onClose() {
@@ -230,6 +259,7 @@ class LoginModal extends Modal {
                 }
             } else {
                 accessToken = data["access_token"];
+                Communities.getInstance().setAccToken(accessToken);
                 Communities.getInstance().setEmail(this.email);
                 Communities.getInstance().loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
                 this.onLogin();
@@ -347,6 +377,58 @@ class RegisterModal extends Modal {
 
     onLogin() {
 
+    }
+
+    onOpen() {
+        //let {contentEl} = this;
+        //contentEl.setText('Woah!');
+    }
+
+    onClose() {
+        let {contentEl} = this;
+        contentEl.empty();
+    }
+}
+
+class CreateCommunityModal extends Modal {
+    name: string;
+    fieldsEl: HTMLElement;
+
+    constructor(app: App) {
+        super(app);
+        this.setTitle('Create Community:');
+
+        this.fieldsEl = this.containerEl.querySelector(".modal").createEl('div', { cls: 'fields' });
+
+        new Setting(this.fieldsEl)
+            .setName('Community Name:')
+            .addText((text) =>
+                text.onChange((value) => {
+                    this.name = value;
+                }
+            )
+        );
+
+        new Setting(this.containerEl.querySelector(".modal"))
+            .addButton((btn) =>
+                btn
+                    .setButtonText('Submit')
+                    .setCta()
+                    .onClick(() => {
+                        this.onSubmit();
+                    })
+            );
+    }
+
+    onSubmit() {
+        console.log("submitted successfully");
+        fetch(`http://127.0.0.1:8000/communities/create/${this.name}`, {
+            method: 'POST',
+        });
+    }
+
+    onLogin() {
+        //this.app.addStatusBarItem().setText("Currently Logged in as: " + this.email.substring(0, this.email.indexOf("@")));
     }
 
     onOpen() {
