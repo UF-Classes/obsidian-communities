@@ -32,7 +32,7 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
 class Community(Base):
     __tablename__ = "communities"
     id = Column(UUID, primary_key=True, index=True, default=uuid.uuid4)
-    name = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String, index=True, nullable=False)
     members: Mapped[List["User"]] = relationship("User", secondary=communities_table, back_populates="communities", lazy="selectin")
     owner = Column(UUID, ForeignKey("user.id"))
     description = Column(String, nullable=True)
