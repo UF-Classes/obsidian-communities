@@ -1,3 +1,6 @@
+# TO DO: CREATE GENERIC DELETE/ADD FUNCTION, THEN USE IT IN EDIT NOTES
+# TO DO: REFACTOR
+
 import asyncio
 import contextlib
 import io
@@ -175,22 +178,22 @@ async def change_community_owner(user: User, community_id: uuid.UUID, new_owner_
         await session.commit()
         return {"message": "Community owner changed"}
 
-async def post_community_note(user: User, community_id: uuid.UUID, note: list[UploadFile]):
+async def post_community_note(user: User, community_id: uuid.UUID, note: list[UploadFile], group_name: str):
     async with get_async_session_context() as session:
         community = await session.get(Community, community_id)
 
-        if community is None:
+        if community is None:   # TO DO: Not Working?
             return {"error": "Community not found"}
         if not await is_community_member(user, community_id):
             return {"error": "User is not a member of the community"}
 
-        shared_note = SharedNoteGroup(community_id=community_id)
+        shared_note = SharedNoteGroup(community_id=community_id, name=group_name)
         session.add(shared_note)
         await session.commit()
 
         for file in note:
             content = await file.read()
-            note = Note(user_id=user.id, shared_id=shared_note.id, content=content)
+            note = Note(user_id=user.id, shared_id=shared_note.id, content=content, file_name=file.filename)
             session.add(note)
 
 
@@ -220,7 +223,8 @@ async def get_community_notes(user: User, community_id: uuid.UUID):
             )
             notes += [note._asdict() for note in group_notes_result.fetchall()]
 
-        return notes
+        note_tuple = (group.SharedNoteGroup.name, notes)
+        return note_tuple
 
 async def get_note_by_id(community_id: uuid.UUID, note_group_id: uuid.UUID):
     async with get_async_session_context() as session:
@@ -240,38 +244,48 @@ async def get_note_by_id(community_id: uuid.UUID, note_group_id: uuid.UUID):
 
         return notes
 
-async def edit_notes(note_ids: list[uuid.UUID], files: list[UploadFile], community_id: uuid.UUID, file_group_id: uuid.UUID, user: User):
+
+async def delete_note(note_id: uuid.UUID):  #TODO: Check if no notes are left in group, if so then delete group
     async with get_async_session_context() as session:
-        # Delete note_ids
-        # Add files
-        group_notes = await session.execute(
+        note = await session.get(Note, note_id)
+        if note is None:
+            return {"error": "Note not found"}
+        await session.delete(note)
+        await session.commit()
+        return {"message": "Note deleted"}
+
+
+
+async def edit_notes(note_ids: list[uuid.UUID], files: list[UploadFile], community_id: uuid.UUID, file_group_id: uuid.UUID, user: User):
+    # TODO: Check if community exists
+    async with get_async_session_context() as session:
+
+        group_notes_result = await session.execute(
             select(SharedNoteGroup).filter_by(community_id=community_id, id=file_group_id)
         )
-        group_notes = group_notes.fetchall()
+        group_notes = group_notes_result.scalars().first()
 
         for note_id in note_ids:
-            note = await session.get(Note, note_id)
-            session.delete(note)
+            await delete_note(note_id)
 
         for file in files:
-            await post_community_note(user, community_id, [file])
+            await post_community_note(user, community_id, [file], group_notes.name)
 
         await session.commit()
 
+    return {"message": "Notes updated"}
 
-        return {"message": "Notes updated"}
-
-async def zipfiles(notes):
-    zip_filename = "Archive.zip"
+async def zipfiles(notes, zip_filename: str):
+    zip_filename = zip_filename + ".zip"
 
     s = io.BytesIO()
     zf = zipfile.ZipFile(s, "w")
 
     for note in notes:
         note_obj = note['Note']
-        note_id = note_obj.id
+        file_name = note_obj.file_name
         content = note_obj.content
-        zf.writestr(f"{note_id}.txt", content)
+        zf.writestr(file_name, content)
 
     zf.close()
 

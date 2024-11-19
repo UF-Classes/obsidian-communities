@@ -112,7 +112,7 @@ async def join_community(community_id: uuid.UUID, user: User = Depends(current_a
 
     return {"message": f"User {user.email} joined the community"}
 
-@app.post("/communities/post/note/{community_id}/{note}")
+@app.post("/communities/post/note/{community_id}/{note}")               # TODO: Redundant Method?
 async def post_note(community_id: uuid.UUID, note: str, user: User = Depends(current_active_user)):
     result = await users.post_community_note(user, community_id, note)
     if result.get("error"):
@@ -120,24 +120,30 @@ async def post_note(community_id: uuid.UUID, note: str, user: User = Depends(cur
 
     return {"message": f"Note posted to community {community_id}"}
 
-@app.post("/community/{community_id}/shared-notes")
-async def create_file(community_id: uuid.UUID, files: list[UploadFile], user: User = Depends(current_active_user)):
-    await users.post_community_note(user, community_id, files)
+@app.post("/community/{community_id}/{group_name}/shared-notes")
+async def create_file(community_id: uuid.UUID, files: list[UploadFile], group_name: str, user: User = Depends(current_active_user)):
+    await users.post_community_note(user, community_id, files, group_name)
     return {"file_size": len(await files[0].read())}
 
 @app.get("/community/{community_id}/shared-notes")
 async def get_files(community_id: uuid.UUID, user: User = Depends(current_active_user)):
     notes = await users.get_community_notes(user, community_id)
-    return await users.zipfiles(notes)
+    return await users.zipfiles(notes[1], notes[0])
 
 @app.get("/community/{community_id}/shared-notes/{note_group_id}")
 async def get_file(community_id: uuid.UUID, note_group_id: uuid.UUID):
     notes = await users.get_note_by_id(community_id, note_group_id)
     return await users.zipfiles(notes)
 
-@app.put("/community/{community_id}/shared-notes/{file-group-id}")
-async def edit_note(note_ids: list[uuid.UUID], files: list[UploadFile], community_id: uuid.UUID, file_group_id: uuid.UUID, user: User = Depends(current_active_user)):
+@app.put("/community/{community_id}/shared-notes/{file_group_id}")
+async def edit_note(community_id: uuid.UUID, file_group_id: uuid.UUID, note_ids: list[uuid.UUID], files: list[UploadFile], user: User = Depends(current_active_user)):
     await users.edit_notes(note_ids, files, community_id, file_group_id, user)
+    return {"message": "Note edited"}
+
+@app.delete("/communities/note/delete/{note_id}")
+async def delete_note(note_id: uuid.UUID):
+    await users.delete_note(note_id)
+    return {"message": "Note deleted"}
 
 
 @app.get("/users/exists/{user_email}")

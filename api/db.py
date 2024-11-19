@@ -48,8 +48,8 @@ class Note(Base):
     id = Column(UUID, primary_key=True, index=True, default=uuid.uuid4)
     shared_id = Column(UUID, ForeignKey("shared_note_groups.id"))
     user_id = Column(UUID, ForeignKey("user.id"))
-    content = Column(VARBINARY, nullable=False)   # LargeBinary is for storing files
-
+    content = Column(VARBINARY, nullable=False)
+    file_name = Column(String, nullable=False)
 
 
 
