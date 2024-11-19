@@ -21,6 +21,10 @@ export default class Communities extends Plugin {
         this.email = email;
     }
 
+    getAccToken(): string {
+        return this.accToken;
+    }
+
     setAccToken(accToken: string) {
         this.accToken = accToken;
     }
@@ -401,7 +405,7 @@ class CreateCommunityModal extends Modal {
         this.fieldsEl = this.containerEl.querySelector(".modal").createEl('div', { cls: 'fields' });
 
         new Setting(this.fieldsEl)
-            .setName('Community Name:')
+            .setName('Enter Community Name:')
             .addText((text) =>
                 text.onChange((value) => {
                     this.name = value;
@@ -424,7 +428,12 @@ class CreateCommunityModal extends Modal {
         console.log("submitted successfully");
         fetch(`http://127.0.0.1:8000/communities/create/${this.name}`, {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json;charset=utf-8',
+                'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+            },
         });
+        this.close();
     }
 
     onLogin() {
