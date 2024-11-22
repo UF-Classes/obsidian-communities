@@ -98,8 +98,8 @@ export class FlashcardSetModal extends Modal {
     }
 
     onClose() {
-        Flashcards.instance.options.onSetSaved(this.flashcardSet);
-        new Notice("Flashcard set saved!");
+        if (Flashcards.instance.options.onSetSaved)
+            Flashcards.instance.options.onSetSaved(this.flashcardSet);
     }
 }
 
@@ -119,6 +119,19 @@ export class AllFlashcardsModal extends Modal {
                         .onClick(() => {
                             Flashcards.instance.openFlashcardSetModal(flashcardSet as FlashcardSet);
                         });
+                })
+                .addButton((button) => {
+                   button
+                      .setIcon("trash-2")
+                      .setCta()
+                      .onClick(() => {
+                          // Prompt confirmation
+
+
+                          if (Flashcards.instance.options.onSetDeleted)
+                              Flashcards.instance.options.onSetDeleted(flashcardSet as FlashcardSet);
+                          setting.settingEl.remove();
+                      });
                 });
         }
     }
@@ -126,7 +139,8 @@ export class AllFlashcardsModal extends Modal {
 
 interface FlashcardsOptions {
     serializedFlashcardSets: Array<SerializedFlashcardSet>;
-    onSetSaved: (flashcardSet: FlashcardSet) => void;
+    onSetSaved?: (flashcardSet: FlashcardSet) => void;
+    onSetDeleted?: (flashcardSet: FlashcardSet) => void;
 }
 
 export default class Flashcards {

@@ -40,9 +40,16 @@ export default class Communities extends Plugin {
                 let idx = this.settings.flashcardSets.findIndex((set) => set.id === flashcardSet.id);
                 if (idx === -1) {
                     this.settings.flashcardSets.push(serializedFlashcard);
+                    new Notice("Flashcard set created!");
                 } else {
                     this.settings.flashcardSets[idx] = serializedFlashcard;
+                    new Notice("Flashcard set updated!");
                 }
+                this.saveSettings();
+            },
+            onSetDeleted: (flashcardSet) => {
+                this.settings.flashcardSets.splice(this.settings.flashcardSets.findIndex((set) => set.id === flashcardSet.id), 1);
+                new Notice("Flashcard set deleted!");
                 this.saveSettings();
             }
         });
