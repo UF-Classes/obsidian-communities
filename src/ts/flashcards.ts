@@ -117,7 +117,7 @@ export class AllFlashcardsModal extends Modal {
                         .setIcon("pencil")
                         .setCta()
                         .onClick(() => {
-                            Flashcards.instance.openFlashcardSetModal(flashcardSet as FlashcardSet);
+                            Flashcards.instance.openAllFlashcardSetsModal(flashcardSet as FlashcardSet);
                         });
                 })
                 .addButton((button) => {
@@ -155,7 +155,7 @@ export default class Flashcards {
         plugin.addCommand({
             id: "create-flashcard-set",
             name: "Create Flashcard Set",
-            editorCallback: this.createFlashcardSet.bind(this),
+            editorCallback: this.openFlashcardSetCreator.bind(this),
         });
 
         plugin.addCommand({
@@ -167,10 +167,10 @@ export default class Flashcards {
         })
     }
 
-    createFlashcardSet(editor: Editor, _: MarkdownView | MarkdownFileInfo) {
+    openFlashcardSetCreator(editor: Editor, _: MarkdownView | MarkdownFileInfo) {
         let selectedText = editor.getSelection();
         if (!selectedText) {
-            this.openFlashcardSetModal(new FlashcardSet("My Flashcard Set", []));
+            this.openAllFlashcardSetsModal(new FlashcardSet("My Flashcard Set", [["", ""]]));
             return;
         }
         // Parse selectedText into flashcards
@@ -188,11 +188,11 @@ export default class Flashcards {
             flashcards.push([match[2].trim(), match[3].trim()]);
             selectedText = selectedText.slice(match.index + match[1].length);
         }
-        this.openFlashcardSetModal(new FlashcardSet("My Flashcard Set", flashcards));
+        this.openAllFlashcardSetsModal(new FlashcardSet("My Flashcard Set", flashcards));
         return;
     }
 
-    openFlashcardSetModal(flashcardSet: FlashcardSet) {
+    openAllFlashcardSetsModal(flashcardSet: FlashcardSet) {
         const modal = new FlashcardSetModal(this.plugin, flashcardSet);
         modal.open();
     }
