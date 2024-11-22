@@ -112,6 +112,7 @@ export class AllFlashcardsModal extends Modal {
         for (const flashcardSet of flashcardSets) {
             const setting = new Setting(this.contentEl)
                 .setName(flashcardSet.name)
+                .setDesc(flashcardSet.flashcards.length + " flashcards, created " + new Date(flashcardSet.id).toLocaleString())
                 .addButton((button) => {
                     button
                         .setIcon("pencil")
