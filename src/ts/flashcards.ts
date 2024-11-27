@@ -1,4 +1,14 @@
-import {Editor, MarkdownFileInfo, MarkdownView, Modal, Notice, Plugin, setIcon, Setting} from "obsidian";
+import {
+    Editor,
+    ItemView,
+    MarkdownFileInfo,
+    MarkdownView,
+    Modal,
+    Plugin,
+    setIcon,
+    Setting,
+    WorkspaceLeaf
+} from "obsidian";
 import {SerializedFlashcardSet} from "./settings";
 
 export class FlashcardSet {
@@ -11,12 +21,32 @@ export class FlashcardSet {
     }
 }
 
-export class FlashcardSetModal extends Modal {
-    private flashcardContainerEl: HTMLDivElement;
+export const VIEW_TYPE_FLASHCARD_SET = "flashcard-set";
 
-    constructor(private plugin: Plugin, public flashcardSet: FlashcardSet) {
-        super(plugin.app);
-        this.setTitle(`Editing Flashcard Set: ${flashcardSet.name}`);
+export class FlashcardSetView extends ItemView {
+    private flashcardContainerEl: HTMLDivElement;
+    public flashcardSet: FlashcardSet;
+    public icon = "notepad-text";
+    public navigation = true;
+
+    constructor(leaf: WorkspaceLeaf) {
+        super(leaf);
+    }
+
+    getViewType() {
+        return VIEW_TYPE_FLASHCARD_SET;
+    }
+
+    getDisplayText() {
+        return "Flashcard Set";
+    }
+
+    loadFlashcardSet(flashcardSet: FlashcardSet) {
+        this.flashcardSet = flashcardSet;
+        this.setState({flashcardSet: flashcardSet}, {history: true}).then(() => {});
+        this.contentEl.empty();
+
+        const titleEl = this.contentEl.createEl("h3", { text: `Editing Flashcard Set: ${flashcardSet.name}` });
 
         new Setting(this.contentEl)
             .setName("Flashcard Set Name")
@@ -24,7 +54,7 @@ export class FlashcardSetModal extends Modal {
                 text.setValue(flashcardSet.name);
                 text.onChange((value) => {
                     flashcardSet.name = value;
-                    this.setTitle(`Editing Flashcard Set: ${flashcardSet.name}`);
+                    titleEl.setText(`Editing Flashcard Set: ${flashcardSet.name}`);
                 });
             });
         this.contentEl.createEl("h4", {text: "Flashcards"});
@@ -86,10 +116,11 @@ export class FlashcardSetModal extends Modal {
             this.flashcardContainerEl.insertBefore(flashcardEl, button);
             this.flashcardContainerEl.insertBefore(newInserter, flashcardEl);
             // Scroll to new flashcard
-            if (flashcardEl.offsetTop + flashcardEl.clientHeight > this.modalEl.scrollTop + this.modalEl.clientHeight) {
+            if (flashcardEl.offsetTop + flashcardEl.clientHeight > this.contentEl.scrollTop + this.contentEl.clientHeight) {
                 const nextInserter = flashcardEl.nextElementSibling as HTMLElement;
-                this.modalEl.scrollTo({
-                    top: nextInserter.offsetTop + nextInserter.clientHeight - this.modalEl.clientHeight,
+                console.log(this.contentEl);
+                this.contentEl.scrollTo({
+                    top: nextInserter.offsetTop + nextInserter.clientHeight - this.contentEl.clientHeight,
                     behavior: "smooth"
                 });
             }
@@ -97,8 +128,12 @@ export class FlashcardSetModal extends Modal {
         return button;
     }
 
-    onClose() {
-        if (Flashcards.instance.options.onSetSaved)
+    async onOpen() {
+        return;
+    }
+
+    async onClose() {
+        if (Flashcards.instance.options.onSetSaved && this.flashcardSet)
             Flashcards.instance.options.onSetSaved(this.flashcardSet);
     }
 }
@@ -118,7 +153,7 @@ export class AllFlashcardsModal extends Modal {
                         .setIcon("pencil")
                         .setCta()
                         .onClick(() => {
-                            Flashcards.instance.openAllFlashcardSetsModal(flashcardSet as FlashcardSet);
+                            Flashcards.instance.openFlashcardSetView(flashcardSet as FlashcardSet);
                         });
                 })
                 .addButton((button) => {
@@ -153,10 +188,12 @@ export default class Flashcards {
         }
         Flashcards.instance = this;
 
+        plugin.registerView(VIEW_TYPE_FLASHCARD_SET, (leaf) => new FlashcardSetView(leaf));
+
         plugin.addCommand({
             id: "create-flashcard-set",
             name: "Create Flashcard Set",
-            editorCallback: this.openFlashcardSetCreator.bind(this),
+            editorCallback: this.onCreateFlashcardSetCommand.bind(this),
         });
 
         plugin.addCommand({
@@ -168,10 +205,10 @@ export default class Flashcards {
         })
     }
 
-    openFlashcardSetCreator(editor: Editor, _: MarkdownView | MarkdownFileInfo) {
+    async onCreateFlashcardSetCommand(editor: Editor, _: MarkdownView | MarkdownFileInfo) {
         let selectedText = editor.getSelection();
         if (!selectedText) {
-            this.openAllFlashcardSetsModal(new FlashcardSet("My Flashcard Set", [["", ""]]));
+            await this.openFlashcardSetView(new FlashcardSet("My Flashcard Set", [["", ""]]));
             return;
         }
         // Parse selectedText into flashcards
@@ -189,12 +226,18 @@ export default class Flashcards {
             flashcards.push([match[2].trim(), match[3].trim()]);
             selectedText = selectedText.slice(match.index + match[1].length);
         }
-        this.openAllFlashcardSetsModal(new FlashcardSet("My Flashcard Set", flashcards));
+        await this.openFlashcardSetView(new FlashcardSet("My Flashcard Set", flashcards));
         return;
     }
 
-    openAllFlashcardSetsModal(flashcardSet: FlashcardSet) {
-        const modal = new FlashcardSetModal(this.plugin, flashcardSet);
-        modal.open();
+    async openFlashcardSetView(flashcardSet: FlashcardSet) {
+        const { workspace } = this.plugin.app;
+        let leaf: WorkspaceLeaf = workspace.getLeaf("tab");
+        await leaf.setViewState({
+            type: VIEW_TYPE_FLASHCARD_SET,
+            active: true
+        });
+        await workspace.revealLeaf(leaf);
+        (leaf.view as FlashcardSetView).loadFlashcardSet(flashcardSet);
     }
 }

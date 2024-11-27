@@ -2,8 +2,8 @@ body {
     color: mediumpurple;
 }
 
-.modal:has(.flashcards__container) {
-    min-width: 50vw;
+.view-content:has(.flashcards__container) {
+    position: relative;
 }
 
 .flashcards__container {
