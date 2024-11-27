@@ -118,7 +118,7 @@ export class AllFlashcardsModal extends Modal {
                         .setIcon("pencil")
                         .setCta()
                         .onClick(() => {
-                            Flashcards.instance.openAllFlashcardSetsModal(flashcardSet as FlashcardSet);
+                            Flashcards.instance.openFlashcardEditorModal(flashcardSet as FlashcardSet);
                         });
                 })
                 .addButton((button) => {
@@ -156,7 +156,7 @@ export default class Flashcards {
         plugin.addCommand({
             id: "create-flashcard-set",
             name: "Create Flashcard Set",
-            editorCallback: this.openFlashcardSetCreator.bind(this),
+            editorCallback: this.onCreateFlashcardSetCommand.bind(this),
         });
 
         plugin.addCommand({
@@ -168,10 +168,10 @@ export default class Flashcards {
         })
     }
 
-    openFlashcardSetCreator(editor: Editor, _: MarkdownView | MarkdownFileInfo) {
+    onCreateFlashcardSetCommand(editor: Editor, _: MarkdownView | MarkdownFileInfo) {
         let selectedText = editor.getSelection();
         if (!selectedText) {
-            this.openAllFlashcardSetsModal(new FlashcardSet("My Flashcard Set", [["", ""]]));
+            this.openFlashcardEditorModal(new FlashcardSet("My Flashcard Set", [["", ""]]));
             return;
         }
         // Parse selectedText into flashcards
@@ -189,11 +189,11 @@ export default class Flashcards {
             flashcards.push([match[2].trim(), match[3].trim()]);
             selectedText = selectedText.slice(match.index + match[1].length);
         }
-        this.openAllFlashcardSetsModal(new FlashcardSet("My Flashcard Set", flashcards));
+        this.openFlashcardEditorModal(new FlashcardSet("My Flashcard Set", flashcards));
         return;
     }
 
-    openAllFlashcardSetsModal(flashcardSet: FlashcardSet) {
+    openFlashcardEditorModal(flashcardSet: FlashcardSet) {
         const modal = new FlashcardSetModal(this.plugin, flashcardSet);
         modal.open();
     }
