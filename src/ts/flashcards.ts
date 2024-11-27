@@ -1,4 +1,4 @@
-import {Editor, MarkdownFileInfo, MarkdownView, Modal, Notice, Plugin, setIcon, Setting} from "obsidian";
+import {Editor, MarkdownFileInfo, MarkdownView, Modal, Plugin, setIcon, Setting} from "obsidian";
 import {SerializedFlashcardSet} from "./settings";
 
 export class FlashcardSet {
