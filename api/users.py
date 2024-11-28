@@ -16,7 +16,7 @@ from api.app import is_production
 from api.schemas import UserCreate
 from api.db import (
     User, get_user_db, create_db_and_tables, async_session_maker, get_async_session,
-    Community, UserCommunityTable, Note, SharedNoteGroup, FlashCard, FlashCardSet, FlashCardSetCommunityTable,
+    Community, UserCommunityTable, Note, SharedNoteGroupTable, FlashCard, FlashCardSet, FlashCardSetCommunityTable,
     FlashCardSetUserTable
 )
 
@@ -81,7 +81,7 @@ async def create_user(email: str, password: str, is_superuser: bool = False):
     except UserAlreadyExists:
         pass
 
-# ------------------------------------------------------ Community Management ------------------------------------------------------
+# ------------------------------------------------------ Core Community Management ------------------------------------------------------
 async def create_community(community_name: str, user: User):
     async with get_async_session_context() as session:
         new_community = Community(name=community_name, owner=user.id)
@@ -128,7 +128,7 @@ async def remove_user_from_community(user_id: uuid.UUID, community_id: uuid.UUID
         await session.commit()
         return {"message": "User removed from community"}
 
-# ------------------------------------------------------ Community Options ------------------------------------------------------
+# ------------------------------------------------------ Community Misc. Options ------------------------------------------------------
 async def update_community_name(user: User, community_id: uuid.UUID, new_name: str):
     async with get_async_session_context() as session:
 
@@ -175,7 +175,7 @@ async def update_community_owner(user: User, community_id: uuid.UUID, new_owner_
         return {"message": "Community owner changed"}
 
 
-# ------------------------------------------------------ Notes ------------------------------------------------------
+# ------------------------------------------------------ Notes Functions ------------------------------------------------------
 
 async def post_community_note(user: User, community_id: uuid.UUID, note: list[UploadFile], group_name: str):
     async with get_async_session_context() as session:
@@ -186,7 +186,7 @@ async def post_community_note(user: User, community_id: uuid.UUID, note: list[Up
             return {"error": "User is not a member of the community"}
 
         community = await session.get(Community, community_id)
-        shared_note = SharedNoteGroup(community_id=community_id, name=group_name)
+        shared_note = SharedNoteGroupTable(community_id=community_id, name=group_name)
         session.add(shared_note)
         await session.commit()
 
@@ -208,7 +208,7 @@ async def get_all_community_notes(user: User, community_id: uuid.UUID):
             return {"error": "User is not a member of the community"}
 
         group_notes = await session.execute(
-            select(SharedNoteGroup).filter_by(community_id=community_id)
+            select(SharedNoteGroupTable).filter_by(community_id=community_id)
         )
         group_notes = group_notes.fetchall()
         notes = []
@@ -227,7 +227,7 @@ async def get_notes_by_group_id(community_id: uuid.UUID, note_group_id: uuid.UUI
     async with get_async_session_context() as session:
 
         group_notes = await session.execute(
-            select(SharedNoteGroup).filter_by(community_id=community_id, id=note_group_id)
+            select(SharedNoteGroupTable).filter_by(community_id=community_id, id=note_group_id)
         )
         group_notes = group_notes.fetchall()
         notes = []
@@ -274,7 +274,7 @@ async def add_and_delete_notes(note_ids_to_delete: list[uuid.UUID], files_to_add
             return {"message": "Community Not Found"}
 
         group_notes_result = await session.execute(
-            select(SharedNoteGroup).filter_by(community_id=community_id, id=file_group_id)
+            select(SharedNoteGroupTable).filter_by(community_id=community_id, id=file_group_id)
         )
         group_notes = group_notes_result.scalars().first()
 
@@ -298,7 +298,7 @@ async def get_user_by_id(user_id: uuid.UUID):
 async def get_note_group_by_note_id(note_id: uuid.UUID):
     async with get_async_session_context() as session:
         note = await session.get(Note, note_id)
-        note_group = await session.get(SharedNoteGroup, note.shared_id)
+        note_group = await session.get(SharedNoteGroupTable, note.shared_id)
         return note_group
 
 

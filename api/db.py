@@ -17,21 +17,30 @@ engine = create_async_engine(DATABASE_URL)
 async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 session = None
 
-
+# User - Community Relationship Table
 class UserCommunityTable(Base):
     __tablename__ = "user_communities_table"
     user_id = Column(UUID, ForeignKey("user.id"), primary_key=True)
     community_id = Column(UUID, ForeignKey("communities.id"), primary_key=True)
 
+# User - FlashCardSet Relationship Table
 class FlashCardSetUserTable(Base):
     __tablename__ = "flashcard_sets_user_table"
     user_id = Column(UUID, ForeignKey("user.id"), primary_key=True)
     flashcard_set_id = Column(UUID, ForeignKey("flashcard_sets.id"), primary_key=True)
 
+# FlashCardSet - Community Relationship Table
 class FlashCardSetCommunityTable(Base):
     __tablename__ = "flashcard_set_community_table"
     community_id = Column(UUID, ForeignKey("communities.id"), primary_key=True)
     flashcard_set_id = Column(UUID, ForeignKey("flashcard_sets.id"), primary_key=True)
+
+
+class SharedNoteGroupTable(Base):
+    __tablename__ = "shared_note_groups"
+    id = Column(UUID, primary_key=True, index=True, default=uuid.uuid4)
+    community_id = Column(UUID, ForeignKey("communities.id"))
+    name = Column(String, nullable=True)
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
     communities = relationship("Community", secondary="user_communities_table", back_populates="members")
@@ -51,13 +60,6 @@ class Community(Base):
         lazy="selectin"
     )
 
-class SharedNoteGroup(Base):
-    __tablename__ = "shared_note_groups"
-    id = Column(UUID, primary_key=True, index=True, default=uuid.uuid4)
-    community_id = Column(UUID, ForeignKey("communities.id"))
-    name = Column(String, nullable=True)
-
-
 class Note(Base):
     __tablename__ = "notes"
     id = Column(UUID, primary_key=True, index=True, default=uuid.uuid4)
@@ -73,7 +75,7 @@ class FlashCard(Base):
     question = Column(String, nullable=False)
     answer = Column(String, nullable=False)
     flashcard_set_id = Column(UUID, ForeignKey("flashcard_sets.id"))
-    def _asdict(self):
+    def _asdict(self):  # Required to json formatting
         return {
             "id": str(self.id),
             "user_id": str(self.user_id),
@@ -94,7 +96,7 @@ class FlashCardSet(Base):
         lazy="selectin"
     )
     user = relationship("User", secondary="flashcard_sets_user_table", back_populates="flash_card_sets", lazy="selectin")
-    def _asdict(self):
+    def _asdict(self):  # Required to json formatting
         return {
             "id": str(self.id),
             "user_id": str(self.user_id),

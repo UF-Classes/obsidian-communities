@@ -55,21 +55,25 @@ def read_root():
     return {"Hello": "World"}
 
 # ---------------------------------------------------- Core Routes (Tech Spec) ----------------------------------------------------
+# Post Notes to Community
 @app.post("/community/{community_id}/{group_name}/shared-notes")
 async def post_community_note(community_id: uuid.UUID, files: list[UploadFile], group_name: str, user: User = Depends(current_active_user)):
     response = await users.post_community_note(user, community_id, files, group_name)
     return response
 
+# Get all notes from a community
 @app.get("/community/{community_id}/shared-notes")         
 async def get_all_community_notes(community_id: uuid.UUID, user: User = Depends(current_active_user)):
     notes = await users.get_all_community_notes(user, community_id)
     return await users.zip_files(notes[1], notes[0])
 
+# Get all notes from a community by group id
 @app.get("/community/{community_id}/shared-notes/{note_group_id}") 
 async def get_notes_by_group_id(community_id: uuid.UUID, note_group_id: uuid.UUID):
     notes = await users.get_notes_by_group_id(community_id, note_group_id)
     return await users.zip_files(notes)
 
+# Add and Delete Notes in a community
 @app.put("/community/{community_id}/shared-notes/{file_group_id}") 
 async def add_and_delete_notes(community_id: uuid.UUID, file_group_id: uuid.UUID, note_ids: list[uuid.UUID], files: list[UploadFile], user: User = Depends(current_active_user)):
     await users.add_and_delete_notes(note_ids, files, community_id, file_group_id, user)
@@ -77,6 +81,14 @@ async def add_and_delete_notes(community_id: uuid.UUID, file_group_id: uuid.UUID
 
 
 # -------------------------------------------------- Core Community Routes --------------------------------------------------
+
+# Create a community
+@app.post("/communities/create/{community_name}")
+async def create_community(community_name: str, user: User = Depends(current_active_user)):
+    community_id = await users.create_community(community_name, user)
+    return {"community_id": community_id}
+
+# Join a community
 @app.post("/communities/join/{community_id}")
 async def add_user_to_community(community_id: uuid.UUID, user: User = Depends(current_active_user)):
     result = await users.add_user_to_community(user, community_id)
@@ -85,23 +97,20 @@ async def add_user_to_community(community_id: uuid.UUID, user: User = Depends(cu
 
     return {"message": f"User {user.email} joined the community"}
 
+# Leave a community
 @app.delete("/communities/leave/{community_id}")
 async def remove_user_from_community(community_id: uuid.UUID, user: User = Depends(current_active_user)):
     result = await users.remove_user_from_community(user.id, community_id)
     return result
 
+# Delete a note by note id
 @app.delete("/communities/note/delete/{note_id}")
 async def delete_note_by_id(note_id: uuid.UUID):
     await users.delete_note_by_id(note_id)
     return {"message": "Note deleted"}
 
-@app.post("/communities/create/{community_name}")
-async def create_community(community_name: str, user: User = Depends(current_active_user)):
-    community_id = await users.create_community(community_name, user)
-    return {"community_id": community_id}
-
 # ------------------------------------------------------ Misc. User Routes ------------------------------------------------------
-
+# Get user by email
 @app.get("/users/exists/{user_email}")
 async def get_user_by_email(user_email: str):
     matching_users = await get_user_by_email(user_email)
@@ -118,16 +127,19 @@ async def get_user_by_email(user_email: str):
         }
 
 # ----------------------------------------------------- Misc. Community Management Routes ---------------------------------------------------
+# Check if user is owner of community
 @app.post("/communities/is_owner/{community_id}")
 async def is_community_owner(community_id: uuid.UUID, user: User = Depends(current_active_user)):
     result = await users.is_community_owner(user, community_id)
     return {"is_owner": result}
 
+# Check if user is member of community
 @app.get("/communities/is_member/{community_id}/{user_id}")
 async def is_community_member(community_id: uuid.UUID, user_id: uuid.UUID):
     result = await users.is_community_member(user_id, community_id)
     return {"is_member": result}
 
+# Change community owner
 @app.post("/communities/change_owner/{community_id}")
 async def update_community_owner(community_id: uuid.UUID, new_owner_id: uuid.UUID, user: User = Depends(current_active_user)):
     result = await users.update_community_owner(user, community_id, new_owner_id)
@@ -136,6 +148,7 @@ async def update_community_owner(community_id: uuid.UUID, new_owner_id: uuid.UUI
     else:
         return {"message": f"Community owner changed to {new_owner_id}"}
 
+# Update community description
 @app.post("/communities/update_description/{community_id}/{description}")
 async def update_community_description(community_id: uuid.UUID, description: str, user: User = Depends(current_active_user)):
     result = await users.update_community_description(user, community_id, description)
@@ -144,6 +157,7 @@ async def update_community_description(community_id: uuid.UUID, description: str
     else:
         return {"message": f"Community description changed to {description}"}
 
+# Update community name
 @app.post("/communities/change_name/{community_id}/{new_name}")
 async def update_community_name(community_id: uuid.UUID, new_name: str, user: User = Depends(current_active_user)):
     result = await users.update_community_name(user, community_id, new_name)
@@ -152,20 +166,32 @@ async def update_community_name(community_id: uuid.UUID, new_name: str, user: Us
     else:
         return {"message": f"Community name changed to {new_name}"}
 
+# Check if community exists
 @app.get("/communities/exists/{community_id}")
 async def is_existing_community(community_id: uuid.UUID):
     result = await users.is_existing_community(community_id)
     return {"exists": result}
 
 # ----------------------------------------------------- Flashcard Routes ---------------------------------------------------
-# Upload flashcard and immediately share with community
-# Gerneralized flashcard set as lsit of tuples (Final data type unknown)
+            # *****************************************************************************************************
+            #    Flashcard set implemented as list of tuples (Data type abstracted due to unknown final data type)
+            # *****************************************************************************************************
+
+# Upload flashcard and immediately share with community (Immediately accessbile to community members)
 # Current Implementation - Key: flashcards | Value: Question, Answer (Comma delimiter)
 @app.post("/flashcards/upload/community/{set_name}/{community_id}")
 async def upload_flashcard_set_to_community(set_name: str,  community_id: uuid.UUID, flashcards: list[str] =  Form(...), user: User = Depends(current_active_user, )):
     parsed_flashcards = [tuple(f.split(",")) for f in flashcards]
     response = await users.upload_flashcard_set(set_name, parsed_flashcards, user, community_id)
     return response
+
+# Upload flashcard and dont immediately share with community (Stays private)
+@app.post("/flashcards/upload/user/{set_name}")
+async def upload_flashcard_set_to_user(set_name: str, flashcards: list[str] =  Form(...), user: User = Depends(current_active_user)):
+    parsed_flashcards = [tuple(f.split(",")) for f in flashcards]
+    response = await users.upload_flashcard_set(set_name, parsed_flashcards, user)
+    return response
+
 
 # Gets formatted JSON file of all FlashcardSets in a community
 # formatted JSON file  = Formats each object with respect to its hierarchy
@@ -194,7 +220,8 @@ async def get_flashcard_sets_by_user(user: User = Depends(current_active_user)):
     return flashcard_sets
 
 # Adds specified community to list of communities that can access a flashcard set - Dependent on privacy_state
-
+# Chooses whether a set able to be downloaded when calling get_flashcard_sets_from_community
+# TODO: Review privacy_str as a boolean
 @app.post("/flashcards/flashcard-sets/change_privacy/{flashcard_set_id}/{community_id}/{privacy_str}")
 async def update_flashcard_set_community_visibility(flashcard_set_id: uuid.UUID, community_id: uuid.UUID, privacy_str: str, user: User = Depends(current_active_user)):
     privacy_bool = privacy_str == "true" or privacy_str == "True" or privacy_str == "TRUE"
