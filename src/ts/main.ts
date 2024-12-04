@@ -1,5 +1,6 @@
 import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, ItemView, WorkspaceLeaf } from 'obsidian';
 import "../styles/styles.scss";
+import "ts/modals.ts";
 // Hub, VIEW_TYPE_HUB;
 
 let accessToken: string = "";
@@ -85,6 +86,8 @@ export default class Communities extends Plugin {
                 new RegisterModal(this.app).open();
             },
         });
+
+
 
         this.addCommand({
             /*
