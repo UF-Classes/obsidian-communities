@@ -24,8 +24,10 @@ from api.db import (
 async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db)):
     yield UserManager(user_db)
 
+
 def get_jwt_strategy() -> JWTStrategy:
     return JWTStrategy(secret=SECRET, lifetime_seconds=3600)
+
 
 SECRET = "SECRET"
 bearer_transport = BearerTransport(tokenUrl="auth/jwt/login")
@@ -49,18 +51,19 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
         print(f"User {user.id} has registered.")
 
     async def on_after_forgot_password(
-        self, user: User, token: str, request: Optional[Request] = None
+            self, user: User, token: str, request: Optional[Request] = None
     ):
         print(f"User {user.id} has forgot their password. Reset token: {token}")
 
     async def on_after_request_verify(
-        self, user: User, token: str, request: Optional[Request] = None
+            self, user: User, token: str, request: Optional[Request] = None
     ):
         print(f"Verification requested for user {user.id}. Verification token: {token}")
 
+
 # ------------------------------------------------------ User Management ------------------------------------------------------
 
-async def get_user_by_email(email : str):
+async def get_user_by_email(email: str):
     async with async_session_maker() as session:
         async with session.begin():
             result = await session.execute(select(User).where(User.email == email))
@@ -81,6 +84,7 @@ async def create_user(email: str, password: str, is_superuser: bool = False):
     except UserAlreadyExists:
         pass
 
+
 # ------------------------------------------------------ Core Community Management ------------------------------------------------------
 async def create_community(community_name: str, user: User):
     async with get_async_session_context() as session:
@@ -90,7 +94,7 @@ async def create_community(community_name: str, user: User):
         await session.refresh(new_community)
         await add_user_to_community(user, new_community.id)
 
-    return  {"Community Created": new_community.id}
+    return {"Community Created": new_community.id}
 
 
 async def add_user_to_community(user: User, community_id: uuid.UUID):
@@ -101,7 +105,6 @@ async def add_user_to_community(user: User, community_id: uuid.UUID):
 
         if not await is_community_member(user.id, community_id):
             return {"error": "User is already a member"}
-
 
         community = await session.get(Community, community_id)
         user_community = UserCommunityTable(user_id=user.id, community_id=community_id)
@@ -122,11 +125,12 @@ async def remove_user_from_community(user_id: uuid.UUID, community_id: uuid.UUID
         stmt = delete(UserCommunityTable).where(and_(
             UserCommunityTable.user_id == user_id,
             UserCommunityTable.community_id == community_id
-            )
+        )
         )
         await session.execute(stmt)
         await session.commit()
         return {"message": "User removed from community"}
+
 
 # ------------------------------------------------------ Community Misc. Options ------------------------------------------------------
 async def update_community_name(user: User, community_id: uuid.UUID, new_name: str):
@@ -225,7 +229,6 @@ async def get_all_community_notes(user: User, community_id: uuid.UUID):
 
 async def get_notes_by_group_id(community_id: uuid.UUID, note_group_id: uuid.UUID):
     async with get_async_session_context() as session:
-
         group_notes = await session.execute(
             select(SharedNoteGroupTable).filter_by(community_id=community_id, id=note_group_id)
         )
@@ -237,7 +240,7 @@ async def get_notes_by_group_id(community_id: uuid.UUID, note_group_id: uuid.UUI
                 select(Note).filter_by(shared_id=note_group_id)
             )
             notes += [note._asdict() for note in notes_result.fetchall()]
-            
+
         return notes
 
 
@@ -267,7 +270,8 @@ async def delete_note_by_id(note_id: uuid.UUID):  #TODO: Check if no notes are l
 
 
 #TODO: Review file_group_id usage
-async def add_and_delete_notes(note_ids_to_delete: list[uuid.UUID], files_to_add: list[UploadFile], community_id: uuid.UUID, file_group_id: uuid.UUID, user: User):
+async def add_and_delete_notes(note_ids_to_delete: list[uuid.UUID], files_to_add: list[UploadFile],
+                               community_id: uuid.UUID, file_group_id: uuid.UUID, user: User):
     async with get_async_session_context() as session:
 
         if not await is_existing_community(community_id):
@@ -291,9 +295,9 @@ async def add_and_delete_notes(note_ids_to_delete: list[uuid.UUID], files_to_add
 # ------------------------------------------------------ Utils ------------------------------------------------------
 async def get_user_by_id(user_id: uuid.UUID):
     async with get_async_session_context() as session:
-
         user = await session.get(User, user_id)
         return user
+
 
 async def get_note_group_by_note_id(note_id: uuid.UUID):
     async with get_async_session_context() as session:
@@ -304,19 +308,18 @@ async def get_note_group_by_note_id(note_id: uuid.UUID):
 
 async def is_existing_community(community_id: uuid.UUID) -> bool:
     async with get_async_session_context() as session:
-
         community = await session.get(Community, community_id)
         return community is not None
 
+
 async def existing_note(note_id: uuid.UUID):
     async with get_async_session_context() as session:
-
         note = await session.get(Note, note_id)
         return note is not None
 
+
 async def is_community_owner(user: User, community_id: uuid.UUID):
     async with get_async_session_context() as session:
-
         if not await is_existing_community(community_id):
             return False
         community = await session.get(Community, community_id)
@@ -325,7 +328,6 @@ async def is_community_owner(user: User, community_id: uuid.UUID):
 
 async def is_community_member(user_id: uuid.UUID, community_id: uuid.UUID):
     async with get_async_session_context() as session:
-
         if not await is_existing_community(community_id):
             return {"error": "Community not found"}
 
@@ -339,10 +341,34 @@ async def is_community_member(user_id: uuid.UUID, community_id: uuid.UUID):
         )
         return {"is_member": result.fetchone() is not None}
 
+
+async def get_community_members(community_id: uuid.UUID):
+    async with get_async_session_context() as session:
+        if not await is_existing_community(community_id):
+            return {"error": "Community not found"}
+
+        members = await session.execute(
+            select(UserCommunityTable).filter_by(community_id=community_id)
+        )
+        return [member.user_id for member in members]
+
+
+async def get_user_communities(user_id: uuid.UUID):
+    async with get_async_session_context() as session:
+        user_communities = await session.execute(
+            select(UserCommunityTable).filter_by(user_id=user_id)
+        )
+        return [{
+            "id": community.community_id,
+            "name": community.name
+        } for community in user_communities]
+
+
 async def is_flashcard_set_owner(user: User, flashcard_set_id: uuid.UUID):
     async with get_async_session_context() as session:
         flashcard_set = await session.get(FlashCardSet, flashcard_set_id)
         return flashcard_set.user_id == user.id
+
 
 # ------------------------------------------------------ Flashcards ------------------------------------------------------
 
@@ -371,15 +397,18 @@ async def upload_flashcard_set(set_name: str, flashcards: list[tuple], user: Use
             if not await is_community_member(user.id, community_id):
                 return {"error": "User is not a member of the community"}
 
-            flashcard_set_table = FlashCardSetCommunityTable(community_id=community_id, flashcard_set_id=flashcard_set.id)
+            flashcard_set_table = FlashCardSetCommunityTable(community_id=community_id,
+                                                             flashcard_set_id=flashcard_set.id)
             session.add(flashcard_set_table)
             await session.commit()
             return {"message": "Flashcard set uploaded to community"}
 
         return {"message": "Flashcard set uploaded to private"}
 
+
 # Updates community accessibility permission to view a flashcard set depending on bool visibility
-async def update_flashcard_set_community_visibility(user: User, flashcard_set_id: uuid.UUID, community_id: uuid.UUID, visibility: bool):
+async def update_flashcard_set_community_visibility(user: User, flashcard_set_id: uuid.UUID, community_id: uuid.UUID,
+                                                    visibility: bool):
     async with get_async_session_context() as session:
         if not await is_existing_community(community_id):
             return {"error": "Community not found"}
@@ -409,6 +438,7 @@ async def update_flashcard_set_community_visibility(user: User, flashcard_set_id
         await session.commit()
         return {"message": "Flashcard set visibility updated"}
 
+
 # Deletes flashcard set and all associated flashcards - Uses String or UUID
 async def delete_flashcard_set(user: User, flashcard_set_id: uuid.UUID = None, flashcard_set_name: str = None):
     async with get_async_session_context() as session:
@@ -437,6 +467,8 @@ async def delete_flashcard_set(user: User, flashcard_set_id: uuid.UUID = None, f
         await session.delete(flashcard_set)
         await session.commit()
         return {"message": "Flashcard set deleted"}
+
+
 # ------------------------------------------------------ Flashcard Getters ------------------------------------------------------
 async def get_all_flashcard_sets_from_user(user: User):
     async with get_async_session_context() as session:
@@ -456,7 +488,9 @@ async def get_all_flashcard_sets_from_community(user: User, community_id: uuid.U
         flashcard_sets = await session.execute(
             select(FlashCardSetCommunityTable).filter_by(community_id=community_id)
         )
-        return [await get_flashcard_set_with_flashcards(flashcard_set.flashcard_set_id) for flashcard_set in flashcard_sets.scalars()]
+        return [await get_flashcard_set_with_flashcards(flashcard_set.flashcard_set_id) for flashcard_set in
+                flashcard_sets.scalars()]
+
 
 async def get_all_flashcards_from_set_id(flashcard_set_id: uuid.UUID):
     async with get_async_session_context() as session:
@@ -464,6 +498,7 @@ async def get_all_flashcards_from_set_id(flashcard_set_id: uuid.UUID):
             select(FlashCard).filter_by(flashcard_set_id=flashcard_set_id)
         )
         return [flashcard._asdict() for flashcard in flashcards.scalars()]
+
 
 async def get_specified_flashcard_set(flashcard_set_id: uuid.UUID = None, flashcard_set_name: str = None):
     async with get_async_session_context() as session:
@@ -482,6 +517,7 @@ async def get_specified_flashcard_set(flashcard_set_id: uuid.UUID = None, flashc
         flashcard_set = await session.get(FlashCardSet, flashcard_set_id)
         return await get_flashcard_set_with_flashcards(flashcard_set.id)
 
+
 async def get_flashcard_set_with_flashcards(flashcard_set_id: uuid.UUID):
     async with get_async_session_context() as session:
         flashcard_set = await session.get(FlashCardSet, flashcard_set_id)
@@ -490,6 +526,8 @@ async def get_flashcard_set_with_flashcards(flashcard_set_id: uuid.UUID):
             "FlashCardSet": flashcard_set._asdict(),
             "FlashCards": flashcards
         }
+
+
 # ------------------------------------------------------ IO ------------------------------------------------------
 
 async def zip_files(notes, zip_filename: str):
@@ -519,6 +557,6 @@ async def setup_db():
     await create_db_and_tables()
     if is_production:
         return
-    
+
     await create_user("admin@example.com", "admin", is_superuser=True)
     await create_user("user@example.com", "password", is_superuser=False)
