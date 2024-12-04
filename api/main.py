@@ -128,7 +128,7 @@ async def delete_note_by_id(note_id: uuid.UUID):
 # ------------------------------------------------------ Misc. User Routes ------------------------------------------------------
 # Get user by email
 @app.get("/users/exists/{user_email}")
-async def get_user_by_email(user_email: str):
+async def get_user_info(user_email: str):
     matching_users = await get_user_by_email(user_email)
     if matching_users is None:
         return {"exists": False}
