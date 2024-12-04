@@ -560,3 +560,4 @@ async def setup_db():
 
     await create_user("admin@example.com", "admin", is_superuser=True)
     await create_user("user@example.com", "password", is_superuser=False)
+    await create_community("Test Community", (await get_user_by_email("user@example.com"))[0])
