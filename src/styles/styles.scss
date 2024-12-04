@@ -1,3 +1,41 @@
 body {
     color: mediumpurple;
 }
+
+.modal:has(.flashcards__container) {
+    min-width: 50vw;
+}
+
+.flashcards__container {
+    .flashcards__insert {
+        width: 80%;
+        height: 1.3em;
+        opacity: 0;
+        box-shadow: none;
+        position: absolute;
+        left: 10%;
+        transform: translate(0, -50%);
+        transition: opacity 0.3s;
+
+        &:hover {
+            opacity: 1;
+        }
+    }
+
+    .flashcard--edit {
+        &:nth-last-child(-n + 1 of .flashcard--edit) {
+            border-bottom: 1px solid var(--background-modifier-border);
+        }
+
+        .setting-item-control {
+            width: 100%;
+            align-items: flex-start;
+            justify-content: flex-start;
+        }
+
+        textarea {
+            resize: vertical;
+            flex-grow: 3;
+        }
+    }
+}

@@ -1,6 +1,8 @@
 import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, ItemView, WorkspaceLeaf } from 'obsidian';
 import "../styles/styles.scss";
 import "ts/modals.ts";
+import Flashcards from "./flashcards";
+import CommunitiesSettings, {DEFAULT_SETTINGS} from "./settings";
 // Hub, VIEW_TYPE_HUB;
 
 let accessToken: string = "";
@@ -11,6 +13,7 @@ export default class Communities extends Plugin {
 
     static instance: Communities;
     accToken: string;
+    settings: CommunitiesSettings;
     email: string;
     loginStatusEl: HTMLElement;
 
@@ -31,10 +34,36 @@ export default class Communities extends Plugin {
     }
 
     onload() {
+    async onload() {
         Communities.instance = this;
         this.email = "Not logged in";
 
         console.log('loading plugin');
+        await this.loadSettings();
+        new Flashcards(this, {
+            serializedFlashcardSets: this.settings.flashcardSets,
+            onSetSaved: (flashcardSet) => {
+                const serializedFlashcard = {
+                    name: flashcardSet.name,
+                    id: flashcardSet.id,
+                    flashcards: flashcardSet.flashcards
+                }
+                let idx = this.settings.flashcardSets.findIndex((set) => set.id === flashcardSet.id);
+                if (idx === -1) {
+                    this.settings.flashcardSets.push(serializedFlashcard);
+                    new Notice("Flashcard set created!");
+                } else {
+                    this.settings.flashcardSets[idx] = serializedFlashcard;
+                    new Notice("Flashcard set updated!");
+                }
+                this.saveSettings();
+            },
+            onSetDeleted: (flashcardSet) => {
+                this.settings.flashcardSets.splice(this.settings.flashcardSets.findIndex((set) => set.id === flashcardSet.id), 1);
+                new Notice("Flashcard set deleted!");
+                this.saveSettings();
+            }
+        });
 
         this.registerView(
             VIEW_TYPE_HUB,
@@ -128,6 +157,15 @@ export default class Communities extends Plugin {
     onunload() {
         console.log('unloading plugin');
     }
+
+    async loadSettings() {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    }
+
+    async saveSettings() {
+        await this.saveData(this.settings);
+    }
+
     /*
     async getDisplayCredentials(): string {
         fetch(`http://127.0.0.1:8000/users/exists/${this.email}`, {
