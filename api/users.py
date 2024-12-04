@@ -356,10 +356,10 @@ async def get_community_members(community_id: uuid.UUID):
 async def get_user_communities(user_id: uuid.UUID):
     async with get_async_session_context() as session:
         user_communities = await session.execute(
-            select(UserCommunityTable).filter_by(user_id=user_id)
+            select(Community.id, Community.name).join(UserCommunityTable).filter_by(user_id=user_id)
         )
         return [{
-            "id": community.community_id,
+            "id": community.id,
             "name": community.name
         } for community in user_communities]
 
@@ -560,3 +560,4 @@ async def setup_db():
 
     await create_user("admin@example.com", "admin", is_superuser=True)
     await create_user("user@example.com", "password", is_superuser=False)
+    await create_community("Test Community", (await get_user_by_email("user@example.com"))[0])
