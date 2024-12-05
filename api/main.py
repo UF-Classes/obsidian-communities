@@ -1,5 +1,6 @@
 import uuid
 from fastapi import Depends, UploadFile, Form, Header
+from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
 from api import users
@@ -196,27 +197,37 @@ async def is_existing_community(community_id: uuid.UUID):
     result = await users.is_existing_community(community_id)
     return {"exists": result}
 
-
 # ----------------------------------------------------- Flashcard Routes ---------------------------------------------------
 # *****************************************************************************************************
 #    Flashcard set implemented as list of tuples (Data type abstracted due to unknown final data type)
 # *****************************************************************************************************
 
+# Gets flashcard set by combination of name and user_id
+@app.get("/flashcards/flashcard-sets/{flashcard_set_id}/{user_id}")
+async def get_flashcard_set_by_id(flashcard_set_id: uuid.UUID, user_id: uuid.UUID):
+    flashcard_set = await users.get_flashcard_set_by_name_id(flashcard_set_id, user_id)
+    return flashcard_set
+
 # Upload flashcard and immediately share with community (Immediately accessbile to community members)
 # Current Implementation - Key: flashcards | Value: Question, Answer (Comma delimiter)
+
+
+class FlashCardSetUpload(BaseModel):
+    flashcards: list[list[str]]
+
 @app.post("/flashcards/upload/community/{set_name}/{community_id}")
-async def upload_flashcard_set_to_community(set_name: str, community_id: uuid.UUID, flashcards: list[str] = Form(...),
+async def upload_flashcard_set_to_community(set_name: str, community_id: uuid.UUID, flashcards: FlashCardSetUpload,
                                             user: User = Depends(current_active_user, )):
-    parsed_flashcards = [tuple(f.split(",")) for f in flashcards]
+    parsed_flashcards = [tuple(f) for f in flashcards.flashcards]
     response = await users.upload_flashcard_set(set_name, parsed_flashcards, user, community_id)
     return response
 
-
 # Upload flashcard and dont immediately share with community (Stays private)
+
 @app.post("/flashcards/upload/user/{set_name}")
-async def upload_flashcard_set_to_user(set_name: str, flashcards: list[str] = Form(...),
+async def upload_flashcard_set_to_user(set_name: str, flashcards: FlashCardSetUpload,
                                        user: User = Depends(current_active_user)):
-    parsed_flashcards = [tuple(f.split(",")) for f in flashcards]
+    parsed_flashcards = [tuple(f) for f in flashcards.flashcards]
     response = await users.upload_flashcard_set(set_name, parsed_flashcards, user)
     return response
 
