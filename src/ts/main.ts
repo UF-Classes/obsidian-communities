@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, ItemView, WorkspaceLeaf } from 'obsidian';
+import { App, Modal, requestUrl, View, Notice, Plugin, PluginSettingTab, Setting, ItemView, WorkspaceLeaf } from 'obsidian';
 import "../styles/styles.scss";
 import Flashcards from "./flashcards";
 import CommunitiesSettings, {DEFAULT_SETTINGS} from "./settings";
@@ -11,6 +11,7 @@ const VIEW_TYPE_HUB = 'hub-view';
 export default class Communities extends Plugin {
 
     static instance: Communities;
+    accToken: string;
     settings: CommunitiesSettings;
     email: string;
     loginStatusEl: HTMLElement;
@@ -21,6 +22,14 @@ export default class Communities extends Plugin {
 
     setEmail(email: string) {
         this.email = email;
+    }
+
+    getAccToken(): string {
+        return this.accToken;
+    }
+
+    setAccToken(accToken: string) {
+        this.accToken = accToken;
     }
 
     async onload() {
@@ -90,6 +99,30 @@ export default class Communities extends Plugin {
         });
 
         this.addCommand({
+            id: 'share-notes-page',
+            name: 'Share Notes',
+            callback: () => {
+                new ShareNoteGroupModal(this.app).open();
+            },
+        });
+
+        this.addCommand({
+            id: 'join-community-page',
+            name: 'Join Community',
+            callback: () => {
+                new JoinCommunityModal(this.app).open();
+            },
+        });
+
+        this.addCommand({
+            id: 'create-community-page',
+            name: 'Create Community',
+            callback: () => {
+                new CreateCommunityModal(this.app).open();
+            },
+        });
+
+        this.addCommand({
             id: 'register-page',
             name: 'Register',
             callback: () => {
@@ -98,10 +131,25 @@ export default class Communities extends Plugin {
         });
 
         this.addCommand({
+            /*
+            fetch('http://127.0.0.1:8000/auth/jwt/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `username=${this.email}&password=${this.password}`})
+                .then(res => res.json())
+                .then(data => {console.log(data)
+            */
             id: 'log-out',
             name: 'Logout',
             callback: () => {
-                fetch('http://127.0.0.1:8000/auth/jwt/logout', { method: 'POST', })
+                fetch('http://127.0.0.1:8000/auth/jwt/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json;charset=utf-8',
+                        'Authorization': `Bearer ${this.accToken}`
+                    }})
                     .then((res) => {
                         if(res.status == 401) {
                             new Notice("User not verified");
@@ -110,9 +158,9 @@ export default class Communities extends Plugin {
                             this.setEmail("Not logged in");
                             this.loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
                         }
-                        return res.json()
+                        return res.json();
                     });
-            },
+            }
         });
 
         this.addSettingTab(new SampleSettingTab(this.app, this));
@@ -176,17 +224,194 @@ class Hub extends ItemView {
     }
 
     getDisplayText() {
-        return 'Example view';
+        return 'Obsidian Communities Hub';
     }
 
     async onOpen() {
         const container = this.containerEl.children[1];
         container.empty();
-        container.createEl('h4', { text: 'Example view' });
+        container.createEl('h4', { text: 'Obsidian Communities Hub' });
+        container.createEl('button', { text: 'Login' });
     }
 
     async onClose() {
         // Nothing to clean up.
+    }
+}
+
+class ShareNoteGroupModal extends Modal {
+    userId: string;
+    communityId: string;
+    noteGroupName: string;
+    listOfCommunities:Array<{
+        id: string,
+        name: string
+    }> = [];
+    fieldsEl: HTMLElement;
+
+    constructor(app: App) {
+        super(app);
+        this.setTitle('Share Note Group:');
+
+        fetch(`http://127.0.0.1:8000/users/me`, {
+                method: "GET",
+                headers: {
+                    'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                },
+            })
+            .then(res => res.json())
+            .then(data => {console.log(data)
+
+            this.userId = data["id"];
+
+            fetch(`http://127.0.0.1:8000/communities/user/${this.userId}`, {
+                method: "GET",
+                headers: {
+                    'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                },
+            })
+            .then(res => res.json())
+            .then(data => {console.log(data)
+
+                this.listOfCommunities = data;
+                this.communityId = data[0].id;
+
+                this.fieldsEl = this.contentEl.createEl('div', { cls: 'fields' });
+
+                new Setting(this.fieldsEl)
+                    .setName('Select Community:')
+                    .addDropdown((dropdown) => {
+                        for(const community of this.listOfCommunities) {
+                            dropdown.addOption(community.id, community.name);
+                        }
+                        dropdown.onChange((value) => this.communityId = value)
+                    })
+
+                new Setting(this.fieldsEl)
+                    .setName('Name of Note Group:')
+                    .addText((text) => {
+                        text.onChange((value) => {
+                            this.noteGroupName = value;
+                        })
+                    })
+
+                new Setting(this.contentEl)
+                    .addButton((btn) =>
+                        btn
+                            .setButtonText('Submit')
+                            .setCta()
+                            .onClick(() => {
+                                this.onSubmit();
+                            })
+                    );
+                });
+        });
+    }
+
+    async onSubmit() {
+        let formData = new FormData();
+        const view = Communities.getInstance().app.workspace.getLeavesOfType("file-explorer")[0].view as View & {fileItems: any[]};
+        const vault = Communities.getInstance().app.vault;
+
+        const listOfFiles = [];
+
+        for (const [noteName, fileItem] of Object.entries(view.fileItems)) {
+            if(fileItem.el.children[0].classList.contains("is-selected") || fileItem.el.children[0].classList.contains("is-active")) {
+                listOfFiles.push(vault.getFileByPath(fileItem.file.path));
+            }
+        }
+
+        if(listOfFiles.length == 0) {
+            new Notice("No File Selected");
+            return;
+        }
+        for(const fileItem of listOfFiles) {
+            formData.append('files', new File([await vault.readBinary(fileItem)], fileItem.name));
+        }
+
+        const headers = {
+            'Accept': '*/*',
+            'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+        };
+
+        console.log("submitted successfully");
+        fetch(`http://127.0.0.1:8000/community/${this.communityId}/${this.noteGroupName}/shared-notes`, {
+            method: 'POST',
+            headers,
+            body: formData,
+        });
+        this.close();
+    }
+
+    onLogin() {
+        //this.app.addStatusBarItem().setText("Currently Logged in as: " + this.email.substring(0, this.email.indexOf("@")));
+    }
+
+    onOpen() {
+        //let {contentEl} = this;
+        //contentEl.setText('Woah!');
+    }
+
+    onClose() {
+        let {contentEl} = this;
+        contentEl.empty();
+    }
+}
+
+class JoinCommunityModal extends Modal {
+    id: string;
+    fieldsEl: HTMLElement;
+
+    constructor(app: App) {
+        super(app);
+        this.setTitle('Create Community:');
+
+        this.fieldsEl = this.contentEl.createEl('div', { cls: 'fields' });
+
+        new Setting(this.fieldsEl)
+            .setName('Enter Community ID:')
+            .addText((text) =>
+                text.onChange((value) => {
+                    this.id = value;
+                }
+            )
+        );
+
+        new Setting(this.contentEl)
+            .addButton((btn) =>
+                btn
+                    .setButtonText('Submit')
+                    .setCta()
+                    .onClick(() => {
+                        this.onSubmit();
+                    })
+            );
+    }
+
+    onSubmit() {
+        console.log("submitted successfully");
+        fetch(`http://127.0.0.1:8000/communities/join/${this.id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json;charset=utf-8',
+                'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+            },
+        });
+        this.close();
+    }
+
+    onLogin() {
+        //this.app.addStatusBarItem().setText("Currently Logged in as: " + this.email.substring(0, this.email.indexOf("@")));
+    }
+
+    onOpen() {
+        //let {contentEl} = this;
+        //contentEl.setText('Woah!');
+    }
+
+    onClose() {
+        let {contentEl} = this;
+        contentEl.empty();
     }
 }
 
@@ -267,6 +492,7 @@ class LoginModal extends Modal {
                 }
             } else {
                 accessToken = data["access_token"];
+                Communities.getInstance().setAccToken(accessToken);
                 Communities.getInstance().setEmail(this.email);
                 Communities.getInstance().loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
                 this.onLogin();
@@ -384,6 +610,63 @@ class RegisterModal extends Modal {
 
     onLogin() {
 
+    }
+
+    onOpen() {
+        //let {contentEl} = this;
+        //contentEl.setText('Woah!');
+    }
+
+    onClose() {
+        let {contentEl} = this;
+        contentEl.empty();
+    }
+}
+
+class CreateCommunityModal extends Modal {
+    name: string;
+    fieldsEl: HTMLElement;
+
+    constructor(app: App) {
+        super(app);
+        this.setTitle('Create Community:');
+
+        this.fieldsEl = this.containerEl.querySelector(".modal").createEl('div', { cls: 'fields' });
+
+        new Setting(this.fieldsEl)
+            .setName('Enter Community Name:')
+            .addText((text) =>
+                text.onChange((value) => {
+                    this.name = value;
+                }
+            )
+        );
+
+        new Setting(this.containerEl.querySelector(".modal"))
+            .addButton((btn) =>
+                btn
+                    .setButtonText('Submit')
+                    .setCta()
+                    .onClick(() => {
+                        this.onSubmit();
+                    })
+            );
+    }
+
+    onSubmit() {
+        console.log("submitted successfully");
+        fetch(`http://127.0.0.1:8000/communities/create/${this.name}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json;charset=utf-8',
+                'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+            },
+        });
+        this.close();
+    }
+
+    onLogin() {
+        //this.app.addStatusBarItem().setText("Currently Logged in as: " + this.email.substring(0, this.email.indexOf("@")));
     }
 
     onOpen() {
