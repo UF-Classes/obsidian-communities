@@ -57,7 +57,7 @@ def read_root():
 # ---------------------------------------------------- Core Routes (Tech Spec) ----------------------------------------------------
 # Post Notes to Community
 @app.post("/community/{community_id}/{group_name}/shared-notes")
-async def post_community_note(community_id: uuid.UUID, files: list[UploadFile], group_name: str,
+async def post_community_note(community_id: uuid.UUID, group_name: str, files: list[UploadFile],
                               user: User = Depends(current_active_user)):
     response = await users.post_community_note(user, community_id, files, group_name)
     return response
