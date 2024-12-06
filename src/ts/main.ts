@@ -1,7 +1,8 @@
-import { App, Modal, requestUrl, View, Notice, Plugin, PluginSettingTab, Setting, ItemView, WorkspaceLeaf } from 'obsidian';
+import { App, Modal, View, Notice, Plugin, PluginSettingTab, Setting, ItemView, WorkspaceLeaf } from 'obsidian';
 import "../styles/styles.scss";
 import Flashcards from "./flashcards";
 import CommunitiesSettings, {DEFAULT_SETTINGS} from "./settings";
+import { user } from "./globals";
 // Hub, VIEW_TYPE_HUB;
 
 let accessToken: string = "";
@@ -22,6 +23,7 @@ export default class Communities extends Plugin {
 
     setEmail(email: string) {
         this.email = email;
+        user.email = email;
     }
 
     getAccToken(): string {
@@ -30,6 +32,7 @@ export default class Communities extends Plugin {
 
     setAccToken(accToken: string) {
         this.accToken = accToken;
+        user.token = accToken;
     }
 
     async onload() {
@@ -252,6 +255,10 @@ class ShareNoteGroupModal extends Modal {
     constructor(app: App) {
         super(app);
         this.setTitle('Share Note Group:');
+        if (user.id === "") {
+            this.setContent("Please login to share notes");
+            return;
+        }
 
         fetch(`http://127.0.0.1:8000/users/me`, {
                 method: "GET",
@@ -260,51 +267,51 @@ class ShareNoteGroupModal extends Modal {
                 },
             })
             .then(res => res.json())
-            .then(data => {console.log(data)
+            .then(data => {
+                console.log(data)
+                this.userId = data["id"];
 
-            this.userId = data["id"];
+                fetch(`http://127.0.0.1:8000/communities/user/${this.userId}`, {
+                    method: "GET",
+                    headers: {
+                        'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                    },
+                })
+                .then(res => res.json())
+                .then(data => {console.log(data)
 
-            fetch(`http://127.0.0.1:8000/communities/user/${this.userId}`, {
-                method: "GET",
-                headers: {
-                    'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
-                },
-            })
-            .then(res => res.json())
-            .then(data => {console.log(data)
+                    this.listOfCommunities = data;
+                    this.communityId = data[0].id;
 
-                this.listOfCommunities = data;
-                this.communityId = data[0].id;
+                    this.fieldsEl = this.contentEl.createEl('div', { cls: 'fields' });
 
-                this.fieldsEl = this.contentEl.createEl('div', { cls: 'fields' });
-
-                new Setting(this.fieldsEl)
-                    .setName('Select Community:')
-                    .addDropdown((dropdown) => {
-                        for(const community of this.listOfCommunities) {
-                            dropdown.addOption(community.id, community.name);
-                        }
-                        dropdown.onChange((value) => this.communityId = value)
-                    })
-
-                new Setting(this.fieldsEl)
-                    .setName('Name of Note Group:')
-                    .addText((text) => {
-                        text.onChange((value) => {
-                            this.noteGroupName = value;
+                    new Setting(this.fieldsEl)
+                        .setName('Select Community:')
+                        .addDropdown((dropdown) => {
+                            for(const community of this.listOfCommunities) {
+                                dropdown.addOption(community.id, community.name);
+                            }
+                            dropdown.onChange((value) => this.communityId = value)
                         })
-                    })
 
-                new Setting(this.contentEl)
-                    .addButton((btn) =>
-                        btn
-                            .setButtonText('Submit')
-                            .setCta()
-                            .onClick(() => {
-                                this.onSubmit();
+                    new Setting(this.fieldsEl)
+                        .setName('Name of Note Group:')
+                        .addText((text) => {
+                            text.onChange((value) => {
+                                this.noteGroupName = value;
                             })
-                    );
-                });
+                        })
+
+                    new Setting(this.contentEl)
+                        .addButton((btn) =>
+                            btn
+                                .setButtonText('Submit')
+                                .setCta()
+                                .onClick(() => {
+                                    this.onSubmit();
+                                })
+                        );
+                    });
         });
     }
 
@@ -495,6 +502,12 @@ class LoginModal extends Modal {
                 Communities.getInstance().setAccToken(accessToken);
                 Communities.getInstance().setEmail(this.email);
                 Communities.getInstance().loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
+                fetch(`http://127.0.0.1:8000/users/me`, {
+                    method: "GET",
+                    headers: {
+                        'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                    },
+                }).then(res => res.json()).then(data => user.id = data["id"]);
                 this.onLogin();
                 this.close();
             }
