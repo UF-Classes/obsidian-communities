@@ -693,12 +693,23 @@ class DownloadNoteGroupModal extends Modal {
 
     constructor(app: App, commId: string) {
         super(app);
-        this.setTitle('Download Contents:');
         this.communityId = commId;
+        this.setTitle("Download Contents: ");
         if (user.id === "") {
             this.setContent("Please login to download shared notes");
             return;
         }
+
+        new Setting(this.contentEl)
+            .setName('Invite Code')
+            .addButton((btn) =>
+                        btn
+                            .setButtonText('Copy')
+                            .setCta()
+                            .onClick(() => {
+                                navigator.clipboard.writeText(`${this.communityId}`);
+                            })
+                    );
 
         fetch(`http://127.0.0.1:8000/community/${this.communityId}/shared-notes`, {
             method: "GET",
