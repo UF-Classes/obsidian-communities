@@ -7,8 +7,10 @@ import CommunitiesSettings, {DEFAULT_SETTINGS} from "./settings";
 let accessToken: string = "";
 
 const VIEW_TYPE_HUB = 'hub-view';
+const VIEW_TYPE_CONTENT = 'content-view';
 
 export default class Communities extends Plugin {
+    isLoggedIn: boolean = false;
 
     static instance: Communities;
     accToken: string;
@@ -68,8 +70,13 @@ export default class Communities extends Plugin {
             (leaf) => new Hub(leaf)
         );
 
+        this.registerView(
+            VIEW_TYPE_CONTENT,
+            (leaf) => new ContentView(leaf)
+        );
+
         this.addRibbonIcon('vault', 'Obsidian-Communities-Hub', () => {
-            this.activateView();
+            this.activateHubView();
         });
 
         this.addStatusBarItem().setText('Obsidian Communities');
@@ -156,6 +163,7 @@ export default class Communities extends Plugin {
                         } else if(res.status == 204) {
                             new Notice("Successfully Logged out");
                             this.setEmail("Not logged in");
+                            this.setLoggedIn(false);
                             this.loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
                         }
                         return res.json();
@@ -193,30 +201,57 @@ export default class Communities extends Plugin {
     }
     */
 
-    async activateView() {
+    async activateHubView() {
         const { workspace } = this.app;
 
-        let leaf: WorkspaceLeaf | null = null;
-        const leaves = workspace.getLeavesOfType(VIEW_TYPE_HUB);
+        // Get the active leaf (current tab)
+        const leaf = workspace.activeLeaf;
 
-        if (leaves.length > 0) {
-            // A leaf with our view already exists, use that
-            leaf = leaves[0];
-        } else {
-            // Our view could not be found in the workspace, create a new leaf
-            // in the right sidebar for it
-            leaf = workspace.getRightLeaf(false);
+        if (leaf) {
+            // Replace the view in the active leaf with the Hub view
             await leaf.setViewState({ type: VIEW_TYPE_HUB, active: true });
+        } else {
+            // Fallback: Create a new leaf in case there's no active one
+            const newLeaf = workspace.getLeaf(true);
+            await newLeaf.setViewState({ type: VIEW_TYPE_HUB, active: true });
         }
+    }
 
-        // "Reveal" the leaf in case it is in a collapsed sidebar
-        workspace.revealLeaf(leaf);
+    async activateContentView() {
+        const { workspace } = this.app;
+
+        // Get the active leaf (current tab)
+        const leaf = workspace.activeLeaf;
+
+        if (leaf) {
+            // Replace the view in the active leaf with the Content view
+            await leaf.setViewState({ type: VIEW_TYPE_CONTENT, active: true });
+        } else {
+            // Fallback: Create a new leaf in case there's no active one
+            const newLeaf = workspace.getLeaf(true);
+            await newLeaf.setViewState({ type: VIEW_TYPE_CONTENT, active: true });
+        }
+    }
+
+    setLoggedIn(loggedIn: boolean) {
+        this.isLoggedIn = loggedIn;
+        if (loggedIn) {
+            this.activateContentView();
+        } else {
+            this.activateHubView();
+        }
     }
 }
 
 class Hub extends ItemView {
+    static instance: Hub
+
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
+    }
+
+    static getInstance(): Hub {
+        return Hub.instance;
     }
 
     getViewType() {
@@ -230,12 +265,255 @@ class Hub extends ItemView {
     async onOpen() {
         const container = this.containerEl.children[1];
         container.empty();
-        container.createEl('h4', { text: 'Obsidian Communities Hub' });
-        container.createEl('button', { text: 'Login' });
+        container.createEl('h1', { text: 'Obsidian Communities Hub' });
+        const loginBtn = container.createEl('button', { text: 'Login', cls: 'loginBtn' });
+        loginBtn.setAttribute("id", "loginBtn");
+        loginBtn.classList.add("loginBtn");
+        loginBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new LoginModal(Communities.getInstance().app).open();
+            if(Communities.getInstance().isLoggedIn == true) { this.onClose(); }
+        });
+        const registerBtn = container.createEl('button', { text: 'Register', cls: 'registerBtn' });
+        registerBtn.setAttribute("id", "registerBtn");
+        registerBtn.classList.add("registerBtn");
+        registerBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new RegisterModal(Communities.getInstance().app).open();
+            if(Communities.getInstance().isLoggedIn == true) { this.onClose(); }
+        });
     }
 
     async onClose() {
-        // Nothing to clean up.
+
+    }
+}
+
+class ContentView extends ItemView {
+    listOfCommunities:Array<{
+            id: string,
+            name: string
+    }> = [];
+
+    userId: string;
+
+    static instance: ContentView
+
+    constructor(leaf: WorkspaceLeaf) {
+        super(leaf);
+    }
+
+    static getInstance(): ContentView {
+        return ContentView.instance;
+    }
+
+    getViewType() {
+        return VIEW_TYPE_CONTENT;
+    }
+
+    getDisplayText() {
+        return 'Obsidian Communities Hub';
+    }
+
+    refreshView() {
+        // Re-fetch data and update view after actions such as button clicks
+        console.log("View Refreshed");
+        this.fetchAndRenderCommunities();
+    }
+
+    async fetchAndRenderCommunities() {
+        const container = this.containerEl.children[1] as HTMLElement;
+        container.empty(); // Clear existing content
+
+        container.createEl('h1', { text: 'Obsidian Communities Hub' });
+
+        // Create buttons (already defined, can be added here or elsewhere)
+        this.createButtons(container);
+
+        // List of Current Communities
+        container.createEl('h2', { text: 'List of Communities' });
+        const listContainer = container.createEl('ul');
+
+        // Fetch user ID and community data
+        try {
+            const userResponse = await fetch(`http://127.0.0.1:8000/users/me`, {
+                method: "GET",
+                headers: {
+                    'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                },
+            });
+            const userData = await userResponse.json();
+            this.userId = userData["id"];
+
+            const communitiesResponse = await fetch(`http://127.0.0.1:8000/communities/user/${this.userId}`, {
+                method: "GET",
+                headers: {
+                    'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                },
+            });
+            const communitiesData = await communitiesResponse.json();
+            this.listOfCommunities = communitiesData;
+
+            // Render the communities in the list
+            this.listOfCommunities.forEach(community => {
+                const listItem = listContainer.createEl('li');
+                listItem.createEl('strong', { text: community.name });
+            });
+        } catch (error) {
+            new Notice('Error fetching communities data.');
+            console.error(error);
+        }
+    }
+
+    createButtons(container: HTMLElement) {
+        // Create Community Button
+        const createCommBtn = container.createEl('button', { text: 'Create Community', cls: 'loginBtn' });
+        createCommBtn.setAttribute("id", "createCommBtn");
+        createCommBtn.classList.add("createCommBtn");
+        createCommBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new CreateCommunityModal(Communities.getInstance().app).open();
+            this.refreshView(); // Refresh view after action
+        });
+
+        // Join Community Button
+        const joinCommBtn = container.createEl('button', { text: 'Join Community', cls: 'loginBtn' });
+        joinCommBtn.setAttribute("id", "joinCommBtn");
+        joinCommBtn.classList.add("joinCommBtn");
+        joinCommBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new JoinCommunityModal(Communities.getInstance().app).open();
+            this.refreshView(); // Refresh view after action
+        });
+
+        // Logout Button
+        const logoutBtn = container.createEl('button', { text: 'Logout', cls: 'logoutBtn' });
+        logoutBtn.setAttribute("id", "logoutBtn");
+        logoutBtn.classList.add("logoutBtn");
+        logoutBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            fetch('http://127.0.0.1:8000/auth/jwt/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json;charset=utf-8',
+                        'Authorization': `Bearer ${Communities.getInstance().accToken}`
+                    }}).then((res) => {
+                        if(res.status === 204) {
+                            new Notice("Successfully Logged out");
+                            Communities.getInstance().setEmail("Not logged in");
+                            Communities.getInstance().setLoggedIn(false);
+                            this.refreshView(); // Refresh view after logout
+                        }
+                    });
+        });
+
+        const refreshBtn = container.createEl('button', { text: 'Refresh', cls: 'loginBtn' });
+        refreshBtn.setAttribute("id", "refreshBtn");
+        refreshBtn.classList.add("refreshBtn");
+        refreshBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            this.refreshView(); // Refresh view after action
+        });
+    }
+
+    async onOpen() {
+        this.fetchAndRenderCommunities(); // Initial render when view is opened
+    }
+
+    /*
+
+    refreshView() {
+        this.onOpen();
+    }
+
+    async onOpen() {
+        const container = this.containerEl.children[1];
+        container.empty();
+        container.createEl('h1', { text: 'Obsidian Communities Hub' });
+
+        // Create Community Button
+        const createCommBtn = container.createEl('button', { text: 'Create Community', cls: 'loginBtn' });
+        createCommBtn.setAttribute("id", "createCommBtn");
+        createCommBtn.classList.add("createCommBtn");
+        createCommBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new CreateCommunityModal(Communities.getInstance().app).open();
+            this.refreshView();
+        });
+
+        // Join Community Button
+        const joinCommBtn = container.createEl('button', { text: 'join Community', cls: 'loginBtn' });
+        joinCommBtn.setAttribute("id", "joinCommBtn");
+        joinCommBtn.classList.add("joinCommBtn");
+        joinCommBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new JoinCommunityModal(Communities.getInstance().app).open();
+            this.refreshView();
+        });
+
+        // List of Current Communities
+        container.createEl('h2', { text: 'List of Communities' });
+
+        const listContainer = container.createEl('ul');
+
+        fetch(`http://127.0.0.1:8000/users/me`, {
+                method: "GET",
+                headers: {
+                    'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                },
+            })
+            .then(res => res.json())
+            .then(data => {console.log(data)
+
+            this.userId = data["id"];
+
+            fetch(`http://127.0.0.1:8000/communities/user/${this.userId}`, {
+                    method: "GET",
+                    headers: {
+                        'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                    },
+                })
+                .then(res => res.json())
+                .then(data => {console.log(data)
+
+                this.listOfCommunities = data;
+
+                for(const community of this.listOfCommunities) {
+                    const listItem = listContainer.createEl('li');
+                    listItem.createEl('strong', { text: community.name });
+                }
+            });
+        });
+
+        // Logout Button
+        const logoutBtn = container.createEl('button', { text: 'Logout', cls: 'logoutBtn' });
+        logoutBtn.setAttribute("id", "logoutBtn");
+        logoutBtn.classList.add("logoutBtn");
+        logoutBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            fetch('http://127.0.0.1:8000/auth/jwt/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json;charset=utf-8',
+                        'Authorization': `Bearer ${Communities.getInstance().accToken}`
+                    }})
+                    .then((res) => {
+                        if(res.status == 401) {
+                            new Notice("User not verified");
+                        } else if(res.status == 204) {
+                            new Notice("Successfully Logged out");
+                            Communities.getInstance().setEmail("Not logged in");
+                            Communities.getInstance().loginStatusEl.setText(`Currently Logged in as: ${Communities.getInstance().email}`);
+                            Communities.getInstance().setLoggedIn(false);
+                            this.onClose();
+                        }
+                        return res.json();
+                    });
+        });
+    }
+    */
+    async onClose() {
+
     }
 }
 
@@ -494,6 +772,7 @@ class LoginModal extends Modal {
                 accessToken = data["access_token"];
                 Communities.getInstance().setAccToken(accessToken);
                 Communities.getInstance().setEmail(this.email);
+                Communities.getInstance().setLoggedIn(true);
                 Communities.getInstance().loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
                 this.onLogin();
                 this.close();
@@ -600,7 +879,7 @@ class RegisterModal extends Modal {
                     }
                 } else {
                     accessToken = data["access_token"];
-
+                    Communities.getInstance().setLoggedIn(true);
                     this.onLogin();
                     this.close();
                 }
