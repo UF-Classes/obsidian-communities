@@ -1,6 +1,7 @@
 import { App, Modal, View, Notice, Plugin, PluginSettingTab, Setting, ItemView, WorkspaceLeaf } from 'obsidian';
 import "../styles/styles.scss";
 import Flashcards from "./flashcards";
+import JSZip from "jszip";
 import CommunitiesSettings, {DEFAULT_SETTINGS} from "./settings";
 import { user } from "./globals";
 // Hub, VIEW_TYPE_HUB;
@@ -8,8 +9,10 @@ import { user } from "./globals";
 let accessToken: string = "";
 
 const VIEW_TYPE_HUB = 'hub-view';
+const VIEW_TYPE_CONTENT = 'content-view';
 
 export default class Communities extends Plugin {
+    isLoggedIn: boolean = false;
 
     static instance: Communities;
     accToken: string;
@@ -41,6 +44,13 @@ export default class Communities extends Plugin {
 
         console.log('loading plugin');
         await this.loadSettings();
+        /*
+        for(const flashcardSet of this.settings.flashcardSets) {
+            if(flashcardSet.flashcards == undefined) {
+                flashcardSet.flashcards = [];
+            }
+        }
+        */
         new Flashcards(this, {
             serializedFlashcardSets: this.settings.flashcardSets,
             onSetSaved: (flashcardSet) => {
@@ -71,8 +81,17 @@ export default class Communities extends Plugin {
             (leaf) => new Hub(leaf)
         );
 
+        this.registerView(
+            VIEW_TYPE_CONTENT,
+            (leaf) => new ContentView(leaf)
+        );
+
         this.addRibbonIcon('vault', 'Obsidian-Communities-Hub', () => {
-            this.activateView();
+            if(this.isLoggedIn) {
+                this.activateContentView();
+                return;
+            }
+            this.activateHubView();
         });
 
         this.addStatusBarItem().setText('Obsidian Communities');
@@ -159,6 +178,7 @@ export default class Communities extends Plugin {
                         } else if(res.status == 204) {
                             new Notice("Successfully Logged out");
                             this.setEmail("Not logged in");
+                            this.setLoggedIn(false);
                             this.loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
                         }
                         return res.json();
@@ -196,30 +216,73 @@ export default class Communities extends Plugin {
     }
     */
 
-    async activateView() {
+    async activateHubView() {
         const { workspace } = this.app;
 
-        let leaf: WorkspaceLeaf | null = null;
-        const leaves = workspace.getLeavesOfType(VIEW_TYPE_HUB);
+        const existingLeaves = workspace.getLeavesOfType(VIEW_TYPE_HUB);
+        existingLeaves.push(...workspace.getLeavesOfType(VIEW_TYPE_CONTENT));
 
-        if (leaves.length > 0) {
-            // A leaf with our view already exists, use that
-            leaf = leaves[0];
+        let leaf;
+
+        if(existingLeaves.length > 0) {
+            leaf = existingLeaves[0];
         } else {
-            // Our view could not be found in the workspace, create a new leaf
-            // in the right sidebar for it
-            leaf = workspace.getRightLeaf(false);
-            await leaf.setViewState({ type: VIEW_TYPE_HUB, active: true });
+            leaf = workspace.getLeaf("tab");
         }
 
-        // "Reveal" the leaf in case it is in a collapsed sidebar
-        workspace.revealLeaf(leaf);
+        if (leaf) {
+            // Replace the view in the active leaf with the Hub view
+            await leaf.setViewState({ type: VIEW_TYPE_HUB, active: true });
+        } else {
+            // Fallback: Create a new leaf in case there's no active one
+            const newLeaf = workspace.getLeaf(true);
+            await newLeaf.setViewState({ type: VIEW_TYPE_HUB, active: true });
+        }
+    }
+
+    async activateContentView() {
+        const { workspace } = this.app;
+
+        const existingLeaves = workspace.getLeavesOfType(VIEW_TYPE_HUB);
+        existingLeaves.push(...workspace.getLeavesOfType(VIEW_TYPE_CONTENT));
+
+        let leaf;
+
+        if(existingLeaves.length > 0) {
+            leaf = existingLeaves[0];
+        } else {
+            leaf = workspace.getLeaf("tab");
+        }
+
+        if (leaf) {
+            // Replace the view in the active leaf with the Content view
+            await leaf.setViewState({ type: VIEW_TYPE_CONTENT, active: true });
+        } else {
+            // Fallback: Create a new leaf in case there's no active one
+            const newLeaf = workspace.getLeaf(true);
+            await newLeaf.setViewState({ type: VIEW_TYPE_CONTENT, active: true });
+        }
+    }
+
+    setLoggedIn(loggedIn: boolean) {
+        this.isLoggedIn = loggedIn;
+        if (loggedIn) {
+            this.activateContentView();
+        } else {
+            this.activateHubView();
+        }
     }
 }
 
 class Hub extends ItemView {
+    static instance: Hub
+
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
+    }
+
+    static getInstance(): Hub {
+        return Hub.instance;
     }
 
     getViewType() {
@@ -233,12 +296,257 @@ class Hub extends ItemView {
     async onOpen() {
         const container = this.containerEl.children[1];
         container.empty();
-        container.createEl('h4', { text: 'Obsidian Communities Hub' });
-        container.createEl('button', { text: 'Login' });
+        container.createEl('h1', { text: 'Obsidian Communities Hub' });
+        const loginBtn = container.createEl('button', { text: 'Login', cls: 'loginBtn' });
+        loginBtn.setAttribute("id", "loginBtn");
+        loginBtn.classList.add("loginBtn");
+        loginBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new LoginModal(Communities.getInstance().app).open();
+            if(Communities.getInstance().isLoggedIn == true) { this.onClose(); }
+        });
+        const registerBtn = container.createEl('button', { text: 'Register', cls: 'registerBtn' });
+        registerBtn.setAttribute("id", "registerBtn");
+        registerBtn.classList.add("registerBtn");
+        registerBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new RegisterModal(Communities.getInstance().app).open();
+            if(Communities.getInstance().isLoggedIn == true) { this.onClose(); }
+        });
     }
 
     async onClose() {
-        // Nothing to clean up.
+
+    }
+}
+
+class ContentView extends ItemView {
+    listOfCommunities:Array<{
+            id: string,
+            name: string
+    }> = [];
+
+    userId: string;
+
+    static instance: ContentView
+
+    constructor(leaf: WorkspaceLeaf) {
+        super(leaf);
+    }
+
+    static getInstance(): ContentView {
+        return ContentView.instance;
+    }
+
+    getViewType() {
+        return VIEW_TYPE_CONTENT;
+    }
+
+    getDisplayText() {
+        return 'Obsidian Communities Hub';
+    }
+
+    refreshView() {
+        // Re-fetch data and update view after actions such as button clicks
+        console.log("View Refreshed");
+        this.fetchAndRenderCommunities();
+    }
+
+    async fetchAndRenderCommunities() {
+        const container = this.containerEl.children[1] as HTMLElement;
+        container.empty(); // Clear existing content
+
+        container.createEl('h1', { text: 'Obsidian Communities Hub' });
+
+        // Create buttons (already defined, can be added here or elsewhere)
+        this.createButtons(container);
+
+        // List of Current Communities
+        container.createEl('h2', { text: 'Your Communities' });
+        const listContainer = container.createEl('ul');
+
+        // Fetch user ID and community data
+        try {
+            const userResponse = await fetch(`http://127.0.0.1:8000/users/me`, {
+                method: "GET",
+                headers: {
+                    'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                },
+            });
+            const userData = await userResponse.json();
+            this.userId = userData["id"];
+
+            const communitiesResponse = await fetch(`http://127.0.0.1:8000/communities/user/${this.userId}`, {
+                method: "GET",
+                headers: {
+                    'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                },
+            });
+            const communitiesData = await communitiesResponse.json();
+            this.listOfCommunities = communitiesData;
+
+            // Render the communities in the list
+            this.listOfCommunities.forEach(community => {
+                const listItem = listContainer.createEl('li');
+                listItem.createEl('button', { text: community.name }).addEventListener("click", () => {
+                    new DownloadNoteGroupModal(Communities.getInstance().app, community.id).open();
+                });
+            });
+        } catch (error) {
+            new Notice('Error fetching communities data.');
+            console.error(error);
+        }
+    }
+
+    createButtons(container: HTMLElement) {
+        // Create Community Button
+        const createCommBtn = container.createEl('button', { text: 'Create Community', cls: 'loginBtn' });
+        createCommBtn.setAttribute("id", "createCommBtn");
+        createCommBtn.classList.add("createCommBtn");
+        createCommBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new CreateCommunityModal(Communities.getInstance().app).open();
+            this.refreshView(); // Refresh view after action
+        });
+
+        // Join Community Button
+        const joinCommBtn = container.createEl('button', { text: 'Join Community', cls: 'loginBtn' });
+        joinCommBtn.setAttribute("id", "joinCommBtn");
+        joinCommBtn.classList.add("joinCommBtn");
+        joinCommBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new JoinCommunityModal(Communities.getInstance().app).open();
+            this.refreshView(); // Refresh view after action
+        });
+
+        // Logout Button
+        const logoutBtn = container.createEl('button', { text: 'Logout', cls: 'logoutBtn' });
+        logoutBtn.setAttribute("id", "logoutBtn");
+        logoutBtn.classList.add("logoutBtn");
+        logoutBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            fetch('http://127.0.0.1:8000/auth/jwt/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json;charset=utf-8',
+                        'Authorization': `Bearer ${Communities.getInstance().accToken}`
+                    }}).then((res) => {
+                        if(res.status === 204) {
+                            new Notice("Successfully Logged out");
+                            Communities.getInstance().setEmail("Not logged in");
+                            Communities.getInstance().setLoggedIn(false);
+                            this.refreshView(); // Refresh view after logout
+                        }
+                    });
+        });
+
+        const refreshBtn = container.createEl('button', { text: 'Refresh', cls: 'loginBtn' });
+        refreshBtn.setAttribute("id", "refreshBtn");
+        refreshBtn.classList.add("refreshBtn");
+        refreshBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            this.refreshView(); // Refresh view after action
+        });
+    }
+
+    async onOpen() {
+        this.fetchAndRenderCommunities(); // Initial render when view is opened
+    }
+
+    /*
+
+    refreshView() {
+        this.onOpen();
+    }
+
+    async onOpen() {
+        const container = this.containerEl.children[1];
+        container.empty();
+        container.createEl('h1', { text: 'Obsidian Communities Hub' });
+
+        // Create Community Button
+        const createCommBtn = container.createEl('button', { text: 'Create Community', cls: 'loginBtn' });
+        createCommBtn.setAttribute("id", "createCommBtn");
+        createCommBtn.classList.add("createCommBtn");
+        createCommBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new CreateCommunityModal(Communities.getInstance().app).open();
+            this.refreshView();
+        });
+
+        // Join Community Button
+        const joinCommBtn = container.createEl('button', { text: 'join Community', cls: 'loginBtn' });
+        joinCommBtn.setAttribute("id", "joinCommBtn");
+        joinCommBtn.classList.add("joinCommBtn");
+        joinCommBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            new JoinCommunityModal(Communities.getInstance().app).open();
+            this.refreshView();
+        });
+
+        // List of Current Communities
+        container.createEl('h2', { text: 'List of Communities' });
+
+        const listContainer = container.createEl('ul');
+
+        fetch(`http://127.0.0.1:8000/users/me`, {
+                method: "GET",
+                headers: {
+                    'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                },
+            })
+            .then(res => res.json())
+            .then(data => {console.log(data)
+
+            this.userId = data["id"];
+
+            fetch(`http://127.0.0.1:8000/communities/user/${this.userId}`, {
+                    method: "GET",
+                    headers: {
+                        'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+                    },
+                })
+                .then(res => res.json())
+                .then(data => {console.log(data)
+
+                this.listOfCommunities = data;
+
+                for(const community of this.listOfCommunities) {
+                    const listItem = listContainer.createEl('li');
+                    listItem.createEl('strong', { text: community.name });
+                }
+            });
+        });
+
+        // Logout Button
+        const logoutBtn = container.createEl('button', { text: 'Logout', cls: 'logoutBtn' });
+        logoutBtn.setAttribute("id", "logoutBtn");
+        logoutBtn.classList.add("logoutBtn");
+        logoutBtn.addEventListener("click", () => {
+            console.log("Button clicked!");
+            fetch('http://127.0.0.1:8000/auth/jwt/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json;charset=utf-8',
+                        'Authorization': `Bearer ${Communities.getInstance().accToken}`
+                    }})
+                    .then((res) => {
+                        if(res.status == 401) {
+                            new Notice("User not verified");
+                        } else if(res.status == 204) {
+                            new Notice("Successfully Logged out");
+                            Communities.getInstance().setEmail("Not logged in");
+                            Communities.getInstance().loginStatusEl.setText(`Currently Logged in as: ${Communities.getInstance().email}`);
+                            Communities.getInstance().setLoggedIn(false);
+                            this.onClose();
+                        }
+                        return res.json();
+                    });
+        });
+    }
+    */
+    async onClose() {
+
     }
 }
 
@@ -348,6 +656,172 @@ class ShareNoteGroupModal extends Modal {
             body: formData,
         });
         this.close();
+    }
+
+    onLogin() {
+        //this.app.addStatusBarItem().setText("Currently Logged in as: " + this.email.substring(0, this.email.indexOf("@")));
+    }
+
+    onOpen() {
+        //let {contentEl} = this;
+        //contentEl.setText('Woah!');
+    }
+
+    onClose() {
+        let {contentEl} = this;
+        contentEl.empty();
+    }
+}
+
+class DownloadNoteGroupModal extends Modal {
+    userId: string;
+    communityId: string;
+    //noteGroupName: string;
+    noteGroupId: string;
+    flashCardSetId: string;
+    listOfGroups:Array<{
+        id: string,
+        name: string
+    }> = [];
+    listOfFlashcardSets:Array<{
+        FlashCardSet: {
+            id: string,
+            name: string
+        },
+    }> = [];
+    fieldsEl: HTMLElement;
+
+    constructor(app: App, commId: string) {
+        super(app);
+        this.setTitle('Download Contents:');
+        this.communityId = commId;
+        if (user.id === "") {
+            this.setContent("Please login to download shared notes");
+            return;
+        }
+
+        fetch(`http://127.0.0.1:8000/community/${this.communityId}/shared-notes`, {
+            method: "GET",
+            headers: {
+                'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+            },
+        })
+        .then(res => res.json())
+        .then(data => {console.log(data)
+
+            this.listOfGroups = data;
+            //this.noteGroupName = data[0].name;
+            if(data.length == 0) {
+                this.contentEl.createEl("span", { text: "No note groups found" });
+            } else {
+                this.noteGroupId = data[0].id;
+
+                this.fieldsEl = this.contentEl.createEl('div', { cls: 'fields' });
+
+                new Setting(this.fieldsEl)
+                    .setName('Select Note Group:')
+                    .addDropdown((dropdown) => {
+                        for(const group of this.listOfGroups) {
+                            dropdown.addOption(group.id, group.name);
+                        }
+                        dropdown.onChange((value) => this.noteGroupId = value)
+                    })
+
+                new Setting(this.contentEl)
+                    .addButton((btn) =>
+                        btn
+                            .setButtonText('Download')
+                            .setCta()
+                            .onClick(() => {
+                                this.onNoteGroupSubmit();
+                            })
+                    );
+            }
+        });
+
+        fetch(`http://127.0.0.1:8000/communities/${this.communityId}/flashcard-sets`, {
+            method: "GET",
+            headers: {
+                'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+            },
+        })
+        .then(res => res.json())
+        .then(data => {console.log(data)
+
+            this.listOfFlashcardSets = data;
+            //this.noteGroupName = data[0].name;
+            if(data.length == 0) {
+                this.contentEl.createEl("span", { text: "No Flash Card Sets found" });
+            } else {
+                this.flashCardSetId = data[0]["FlashCardSet"].id;
+
+                this.fieldsEl = this.contentEl.createEl('div', { cls: 'fields' });
+
+                new Setting(this.fieldsEl)
+                    .setName('Select Flash Card Set:')
+                    .addDropdown((dropdown) => {
+                        for(const set of this.listOfFlashcardSets) {
+                            dropdown.addOption(set["FlashCardSet"].id, set["FlashCardSet"].name);
+                        }
+                        dropdown.onChange((value) => this.flashCardSetId = value)
+                    })
+
+                new Setting(this.contentEl)
+                    .addButton((btn) =>
+                        btn
+                            .setButtonText('Download')
+                            .setCta()
+                            .onClick(() => {
+                                this.onFlashCardSetSubmit();
+                            })
+                    );
+            }
+        });
+    }
+
+    async onFlashCardSetSubmit() {
+        fetch(`http://127.0.0.1:8000/flashcards/flashcard-sets/${this.flashCardSetId}`, {
+            method: "GET",
+            headers: {
+                'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+            },
+        })
+        .then(res => res.json())
+        .then(data => {
+            const serializedFlashcard = {
+                name: data["FlashCardSet"].name,
+                id: Date.now(),
+                flashcards: data["FlashCards"].map((flashcard:any) => [flashcard["question"], flashcard["answer"]])
+            }
+            Communities.getInstance().settings.flashcardSets.push(serializedFlashcard);
+            new Notice("Flashcard set created!");
+            Communities.getInstance().saveSettings();
+        })
+    }
+
+    async onNoteGroupSubmit() {
+        const vault = Communities.getInstance().app.vault;
+
+        fetch(`http://127.0.0.1:8000/community/${this.communityId}/shared-notes/${this.noteGroupId}`, {
+            method: "GET",
+            headers: {
+                'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+            },
+        })
+        .then(async res => {
+
+        const arrayBuffer = res.arrayBuffer();
+        const zip = await JSZip.loadAsync(arrayBuffer);
+
+        try {
+            vault.createFolder(vault.getRoot().path+"/Shared_Notes");
+        } catch { }
+
+        for(const [fileName, file] of Object.entries(zip.files as {any:any})) {
+            vault.createBinary(vault.getRoot().path+"/Shared_Notes/"+fileName, await file.async("arraybuffer"));
+        }
+
+        });
     }
 
     onLogin() {
@@ -501,6 +975,7 @@ class LoginModal extends Modal {
                 accessToken = data["access_token"];
                 Communities.getInstance().setAccToken(accessToken);
                 Communities.getInstance().setEmail(this.email);
+                Communities.getInstance().setLoggedIn(true);
                 Communities.getInstance().loginStatusEl.setText(`Currently Logged in as: ${this.email}`);
                 fetch(`http://127.0.0.1:8000/users/me`, {
                     method: "GET",
@@ -613,7 +1088,7 @@ class RegisterModal extends Modal {
                     }
                 } else {
                     accessToken = data["access_token"];
-
+                    Communities.getInstance().setLoggedIn(true);
                     this.onLogin();
                     this.close();
                 }
@@ -666,9 +1141,9 @@ class CreateCommunityModal extends Modal {
             );
     }
 
-    onSubmit() {
+     onSubmit() {
         console.log("submitted successfully");
-        fetch(`http://127.0.0.1:8000/communities/create/${this.name}`, {
+         fetch(`http://127.0.0.1:8000/communities/create/${this.name}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json;charset=utf-8',

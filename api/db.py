@@ -43,6 +43,12 @@ class SharedNoteGroupTable(Base):
     id = Column(UUID, primary_key=True, index=True, default=uuid.uuid4)
     community_id = Column(UUID, ForeignKey("communities.id"))
     name = Column(String, nullable=True)
+    def _asdict(self):  # Required to json formatting
+        return {
+            "id": str(self.id),
+            "community_id": str(self.community_id),
+            "name": self.name,
+        }
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
     communities = relationship("Community", secondary="user_communities_table", back_populates="members")

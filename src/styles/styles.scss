@@ -2,6 +2,53 @@ body {
     color: mediumpurple;
 }
 
+.loginBtn {
+    background-color: #6a0dad !important; /* Deep purple color */
+    color: #ffffff !important; /* White text */
+    border: none !important; /* Remove default border */
+    border-radius: 8px !important; /* Rounded corners */
+    padding: 12px 24px !important; /* Add padding for size */
+    margin: 0 30px !important; /* Adds space to the right of the button */
+    margin-bottom: 10px !important;
+    font-size: 16px; /* Text size */
+    font-weight: bold; /* Bold text */
+    text-align: center; /* Center text */
+    cursor: pointer; /* Pointer cursor on hover */
+    transition: all 0.3s ease; /* Smooth transition effect */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2) !important; /* Subtle shadow */
+}
+
+.logoutBtn {
+    background-color: #6a0dad !important; /* Deep purple color */
+    color: #ffffff !important; /* White text */
+    border: none !important; /* Remove default border */
+    border-radius: 8px !important; /* Rounded corners */
+    padding: 12px 24px !important; /* Add padding for size */
+    margin: 0 30px !important; /* Adds space to the right of the button */
+    margin-bottom: 10px !important;
+    font-size: 16px; /* Text size */
+    font-weight: bold; /* Bold text */
+    text-align: center; /* Center text */
+    cursor: pointer; /* Pointer cursor on hover */
+    transition: all 0.3s ease; /* Smooth transition effect */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2) !important; /* Subtle shadow */
+}
+
+.registerBtn {
+    background-color: #6a0dad !important; /* Deep purple color */
+    color: #ffffff !important; /* White text */
+    border: none !important; /* Remove default border */
+    border-radius: 8px !important; /* Rounded corners */
+    padding: 12px 24px !important; /* Add padding for size */
+    margin-left: 15px !important;
+    font-size: 16px; /* Text size */
+    font-weight: bold; /* Bold text */
+    text-align: center; /* Center text */
+    cursor: pointer; /* Pointer cursor on hover */
+    transition: all 0.3s ease; /* Smooth transition effect */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2) !important; /* Subtle shadow */
+}
+
 .modal:has(.flashcards__container) {
     min-width: 50vw;
 }

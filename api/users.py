@@ -214,37 +214,29 @@ async def get_all_community_notes(user: User, community_id: uuid.UUID):
         group_notes = await session.execute(
             select(SharedNoteGroupTable).filter_by(community_id=community_id)
         )
-        group_notes = group_notes.fetchall()
+        # group_notes = group_notes.fetchall()
         notes = []
 
-        for group in group_notes:
-            group_notes_result = await session.execute(
-                select(Note).filter_by(shared_id=group.SharedNoteGroup.id)
-            )
-            notes += [note._asdict() for note in group_notes_result.fetchall()]
+        for group in group_notes.fetchall():
+            print(group)
+            notes.append(group._asdict()["SharedNoteGroupTable"])
 
-        note_tuple = (group.SharedNoteGroup.name, notes)
-        return note_tuple
+        return notes
 
 
 async def get_notes_by_group_id(community_id: uuid.UUID, note_group_id: uuid.UUID):
     async with get_async_session_context() as session:
         group_notes = await session.execute(
-            select(SharedNoteGroupTable).filter_by(community_id=community_id, id=note_group_id)
+            select(Note).filter_by(shared_id=note_group_id)
         )
-        group_notes = group_notes.fetchall()
-        notes = []
+        notes = [note._asdict() for note in group_notes.fetchall()]
 
-        for group in group_notes:
-            notes_result = await session.execute(
-                select(Note).filter_by(shared_id=note_group_id)
-            )
-            notes += [note._asdict() for note in notes_result.fetchall()]
+        group_name = await session.execute(select(SharedNoteGroupTable).filter_by(id=note_group_id))
 
-        return notes
+        return notes, group_name.fetchone()[0].name
 
 
-async def delete_note_by_id(note_id: uuid.UUID):  #TODO: Check if no notes are left in group, if so then delete group
+async def delete_note_by_id(note_id: uuid.UUID):  # TODO: Check if no notes are left in group, if so then delete group
     async with get_async_session_context() as session:
 
         if not await existing_note(note_id):
@@ -269,7 +261,7 @@ async def delete_note_by_id(note_id: uuid.UUID):  #TODO: Check if no notes are l
         return {"message": "Note deleted"}
 
 
-#TODO: Review file_group_id usage
+# TODO: Review file_group_id usage
 async def add_and_delete_notes(note_ids_to_delete: list[uuid.UUID], files_to_add: list[UploadFile],
                                community_id: uuid.UUID, file_group_id: uuid.UUID, user: User):
     async with get_async_session_context() as session:
@@ -529,6 +521,7 @@ async def get_flashcard_set_with_flashcards(flashcard_set_id: uuid.UUID):
             "FlashCardSet": flashcard_set_dict,
             "FlashCards": flashcards,
         }
+
 
 async def get_flashcard_set_by_name_id(flashcard_set_id: uuid.UUID, user_id: uuid.UUID):
     async with get_async_session_context() as session:
