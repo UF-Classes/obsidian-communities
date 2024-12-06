@@ -2,6 +2,7 @@ import {Editor, MarkdownFileInfo, MarkdownView, Modal, Notice, Plugin, setIcon, 
 import {SerializedFlashcardSet} from "./settings";
 import Communities from "./main";
 import {user} from "./globals";
+import {FlashcardWriteGame, VIEW_TYPE_FLASHCARD_WRITE_GAME} from "./flashcard-games/write";
 
 export class FlashcardSet {
     id: number;  // Unix time created
@@ -38,6 +39,19 @@ export class FlashcardSetModal extends Modal {
                     .onClick(() => {
                         new FlashcardsShareModal(plugin, flashcardSet).open();
                     });
+            });
+        this.contentEl.createEl("h4", {text: "Study Games"});
+        new Setting(this.contentEl)
+            .setName("Write Game")
+            .addButton((button) => {
+                button
+                    .setCta()
+                    .setIcon("gamepad-2")
+                    .onClick(() => {
+                        Flashcards.instance.openWriteGame(flashcardSet);
+                        this.close();
+                    });
+                button.buttonEl.title = "Study flashcards by writing the answer.";
             });
         this.contentEl.createEl("h4", {text: "Flashcards"});
         this.flashcardContainerEl = this.contentEl.createEl("div", {cls: "flashcards__container"});
@@ -246,6 +260,8 @@ export default class Flashcards {
         }
         Flashcards.instance = this;
 
+        plugin.registerView(VIEW_TYPE_FLASHCARD_WRITE_GAME, (leaf) => new FlashcardWriteGame(leaf));
+
         plugin.addCommand({
             id: "create-flashcard-set",
             name: "Create Flashcard Set",
@@ -289,5 +305,16 @@ export default class Flashcards {
     openFlashcardEditorModal(flashcardSet: FlashcardSet) {
         const modal = new FlashcardSetModal(this.plugin, flashcardSet);
         modal.open();
+    }
+
+    async openWriteGame(flashcardSet: FlashcardSet) {
+        const { workspace } = this.plugin.app;
+        let leaf = workspace.getLeaf("tab");
+        await leaf.setViewState({
+            type: VIEW_TYPE_FLASHCARD_WRITE_GAME,
+            active: true
+        });
+        await workspace.revealLeaf(leaf);
+        (leaf.view as FlashcardWriteGame).loadFlashcardSet(flashcardSet);
     }
 }
