@@ -40,6 +40,7 @@ export class FlashcardWriteGame extends ItemView {
             </div>
             <div class="flashcard-write-game__result" style="display: none">
                 <span class="flashcard-write-game__result-text"></span>
+                <br>
                 <span class="flashcard-write-game__result-answer"></span>
                 <button class="flashcard-write-game__result-change"></button>
             </div>

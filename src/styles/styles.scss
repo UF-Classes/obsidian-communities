@@ -86,3 +86,41 @@ body {
         }
     }
 }
+
+.flashcard-write-game {
+    &__top-bar {
+        display: flex;
+        width: 100%;
+        flex-wrap: nowrap;
+        justify-content: space-between;
+    }
+
+    &__result {
+        margin: 20px;
+        line-height: 2;
+
+        .flashcard-write-game__result-text {
+            font-size: large;
+            font-weight: bold;
+        }
+    }
+
+    &__current-question {
+        display: block;
+        margin: 0 auto;
+        width: 20%;
+        min-width: 250px;
+
+        .flashcard-write-game__question {
+            font-size: large;
+            text-align: center;
+            display: block;
+            padding: 20px;
+        }
+
+        .flashcard-write-game__answer {
+            margin: 0 auto;
+            display: block;
+        }
+    }
+}
