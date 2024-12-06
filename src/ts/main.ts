@@ -1,6 +1,7 @@
 import { App, Modal, View, Notice, Plugin, PluginSettingTab, Setting, ItemView, WorkspaceLeaf } from 'obsidian';
 import "../styles/styles.scss";
 import Flashcards from "./flashcards";
+import JSZip from "jszip";
 import CommunitiesSettings, {DEFAULT_SETTINGS} from "./settings";
 import { user } from "./globals";
 // Hub, VIEW_TYPE_HUB;
@@ -43,6 +44,13 @@ export default class Communities extends Plugin {
 
         console.log('loading plugin');
         await this.loadSettings();
+        /*
+        for(const flashcardSet of this.settings.flashcardSets) {
+            if(flashcardSet.flashcards == undefined) {
+                flashcardSet.flashcards = [];
+            }
+        }
+        */
         new Flashcards(this, {
             serializedFlashcardSets: this.settings.flashcardSets,
             onSetSaved: (flashcardSet) => {
@@ -79,6 +87,10 @@ export default class Communities extends Plugin {
         );
 
         this.addRibbonIcon('vault', 'Obsidian-Communities-Hub', () => {
+            if(this.isLoggedIn) {
+                this.activateContentView();
+                return;
+            }
             this.activateHubView();
         });
 
@@ -207,8 +219,16 @@ export default class Communities extends Plugin {
     async activateHubView() {
         const { workspace } = this.app;
 
-        // Get the active leaf (current tab)
-        const leaf = workspace.activeLeaf;
+        const existingLeaves = workspace.getLeavesOfType(VIEW_TYPE_HUB);
+        existingLeaves.push(...workspace.getLeavesOfType(VIEW_TYPE_CONTENT));
+
+        let leaf;
+
+        if(existingLeaves.length > 0) {
+            leaf = existingLeaves[0];
+        } else {
+            leaf = workspace.getLeaf("tab");
+        }
 
         if (leaf) {
             // Replace the view in the active leaf with the Hub view
@@ -223,8 +243,16 @@ export default class Communities extends Plugin {
     async activateContentView() {
         const { workspace } = this.app;
 
-        // Get the active leaf (current tab)
-        const leaf = workspace.activeLeaf;
+        const existingLeaves = workspace.getLeavesOfType(VIEW_TYPE_HUB);
+        existingLeaves.push(...workspace.getLeavesOfType(VIEW_TYPE_CONTENT));
+
+        let leaf;
+
+        if(existingLeaves.length > 0) {
+            leaf = existingLeaves[0];
+        } else {
+            leaf = workspace.getLeaf("tab");
+        }
 
         if (leaf) {
             // Replace the view in the active leaf with the Content view
@@ -334,7 +362,7 @@ class ContentView extends ItemView {
         this.createButtons(container);
 
         // List of Current Communities
-        container.createEl('h2', { text: 'List of Communities' });
+        container.createEl('h2', { text: 'Your Communities' });
         const listContainer = container.createEl('ul');
 
         // Fetch user ID and community data
@@ -360,7 +388,9 @@ class ContentView extends ItemView {
             // Render the communities in the list
             this.listOfCommunities.forEach(community => {
                 const listItem = listContainer.createEl('li');
-                listItem.createEl('strong', { text: community.name });
+                listItem.createEl('button', { text: community.name }).addEventListener("click", () => {
+                    new DownloadNoteGroupModal(Communities.getInstance().app, community.id).open();
+                });
             });
         } catch (error) {
             new Notice('Error fetching communities data.');
@@ -626,6 +656,172 @@ class ShareNoteGroupModal extends Modal {
             body: formData,
         });
         this.close();
+    }
+
+    onLogin() {
+        //this.app.addStatusBarItem().setText("Currently Logged in as: " + this.email.substring(0, this.email.indexOf("@")));
+    }
+
+    onOpen() {
+        //let {contentEl} = this;
+        //contentEl.setText('Woah!');
+    }
+
+    onClose() {
+        let {contentEl} = this;
+        contentEl.empty();
+    }
+}
+
+class DownloadNoteGroupModal extends Modal {
+    userId: string;
+    communityId: string;
+    //noteGroupName: string;
+    noteGroupId: string;
+    flashCardSetId: string;
+    listOfGroups:Array<{
+        id: string,
+        name: string
+    }> = [];
+    listOfFlashcardSets:Array<{
+        FlashCardSet: {
+            id: string,
+            name: string
+        },
+    }> = [];
+    fieldsEl: HTMLElement;
+
+    constructor(app: App, commId: string) {
+        super(app);
+        this.setTitle('Download Contents:');
+        this.communityId = commId;
+        if (user.id === "") {
+            this.setContent("Please login to download shared notes");
+            return;
+        }
+
+        fetch(`http://127.0.0.1:8000/community/${this.communityId}/shared-notes`, {
+            method: "GET",
+            headers: {
+                'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+            },
+        })
+        .then(res => res.json())
+        .then(data => {console.log(data)
+
+            this.listOfGroups = data;
+            //this.noteGroupName = data[0].name;
+            if(data.length == 0) {
+                this.contentEl.createEl("span", { text: "No note groups found" });
+            } else {
+                this.noteGroupId = data[0].id;
+
+                this.fieldsEl = this.contentEl.createEl('div', { cls: 'fields' });
+
+                new Setting(this.fieldsEl)
+                    .setName('Select Note Group:')
+                    .addDropdown((dropdown) => {
+                        for(const group of this.listOfGroups) {
+                            dropdown.addOption(group.id, group.name);
+                        }
+                        dropdown.onChange((value) => this.noteGroupId = value)
+                    })
+
+                new Setting(this.contentEl)
+                    .addButton((btn) =>
+                        btn
+                            .setButtonText('Download')
+                            .setCta()
+                            .onClick(() => {
+                                this.onNoteGroupSubmit();
+                            })
+                    );
+            }
+        });
+
+        fetch(`http://127.0.0.1:8000/communities/${this.communityId}/flashcard-sets`, {
+            method: "GET",
+            headers: {
+                'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+            },
+        })
+        .then(res => res.json())
+        .then(data => {console.log(data)
+
+            this.listOfFlashcardSets = data;
+            //this.noteGroupName = data[0].name;
+            if(data.length == 0) {
+                this.contentEl.createEl("span", { text: "No Flash Card Sets found" });
+            } else {
+                this.flashCardSetId = data[0]["FlashCardSet"].id;
+
+                this.fieldsEl = this.contentEl.createEl('div', { cls: 'fields' });
+
+                new Setting(this.fieldsEl)
+                    .setName('Select Flash Card Set:')
+                    .addDropdown((dropdown) => {
+                        for(const set of this.listOfFlashcardSets) {
+                            dropdown.addOption(set["FlashCardSet"].id, set["FlashCardSet"].name);
+                        }
+                        dropdown.onChange((value) => this.flashCardSetId = value)
+                    })
+
+                new Setting(this.contentEl)
+                    .addButton((btn) =>
+                        btn
+                            .setButtonText('Download')
+                            .setCta()
+                            .onClick(() => {
+                                this.onFlashCardSetSubmit();
+                            })
+                    );
+            }
+        });
+    }
+
+    async onFlashCardSetSubmit() {
+        fetch(`http://127.0.0.1:8000/flashcards/flashcard-sets/${this.flashCardSetId}`, {
+            method: "GET",
+            headers: {
+                'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+            },
+        })
+        .then(res => res.json())
+        .then(data => {
+            const serializedFlashcard = {
+                name: data["FlashCardSet"].name,
+                id: Date.now(),
+                flashcards: data["FlashCards"].map((flashcard:any) => [flashcard["question"], flashcard["answer"]])
+            }
+            Communities.getInstance().settings.flashcardSets.push(serializedFlashcard);
+            new Notice("Flashcard set created!");
+            Communities.getInstance().saveSettings();
+        })
+    }
+
+    async onNoteGroupSubmit() {
+        const vault = Communities.getInstance().app.vault;
+
+        fetch(`http://127.0.0.1:8000/community/${this.communityId}/shared-notes/${this.noteGroupId}`, {
+            method: "GET",
+            headers: {
+                'Authorization': `Bearer ${Communities.getInstance().getAccToken()}`
+            },
+        })
+        .then(async res => {
+
+        const arrayBuffer = res.arrayBuffer();
+        const zip = await JSZip.loadAsync(arrayBuffer);
+
+        try {
+            vault.createFolder(vault.getRoot().path+"/Shared_Notes");
+        } catch { }
+
+        for(const [fileName, file] of Object.entries(zip.files as {any:any})) {
+            vault.createBinary(vault.getRoot().path+"/Shared_Notes/"+fileName, await file.async("arraybuffer"));
+        }
+
+        });
     }
 
     onLogin() {
@@ -945,9 +1141,9 @@ class CreateCommunityModal extends Modal {
             );
     }
 
-    onSubmit() {
+     onSubmit() {
         console.log("submitted successfully");
-        fetch(`http://127.0.0.1:8000/communities/create/${this.name}`, {
+         fetch(`http://127.0.0.1:8000/communities/create/${this.name}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json;charset=utf-8',

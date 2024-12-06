@@ -68,14 +68,14 @@ async def post_community_note(community_id: uuid.UUID, group_name: str, files: l
 @app.get("/community/{community_id}/shared-notes")
 async def get_all_community_notes(community_id: uuid.UUID, user: User = Depends(current_active_user)):
     notes = await users.get_all_community_notes(user, community_id)
-    return await users.zip_files(notes[1], notes[0])
+    return notes
 
 
 # Get all notes from a community by group id
 @app.get("/community/{community_id}/shared-notes/{note_group_id}")
 async def get_notes_by_group_id(community_id: uuid.UUID, note_group_id: uuid.UUID):
     notes = await users.get_notes_by_group_id(community_id, note_group_id)
-    return await users.zip_files(notes)
+    return await users.zip_files(*notes)
 
 
 # Add and Delete Notes in a community
