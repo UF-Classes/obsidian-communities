@@ -311,7 +311,10 @@ class Hub extends ItemView {
         registerBtn.addEventListener("click", () => {
             console.log("Button clicked!");
             new RegisterModal(Communities.getInstance().app).open();
-            if(Communities.getInstance().isLoggedIn == true) { this.onClose(); }
+            if(Communities.getInstance().isLoggedIn == true) {
+                console.log("logged in");
+                this.onClose();
+            }
         });
     }
 
@@ -1104,7 +1107,7 @@ class RegisterModal extends Modal {
                     }
                 } else {
                     accessToken = data["access_token"];
-                    Communities.getInstance().setLoggedIn(true);
+                    //Communities.getInstance().setLoggedIn(true);
                     this.onLogin();
                     this.close();
                 }
