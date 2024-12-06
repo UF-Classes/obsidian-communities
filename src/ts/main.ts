@@ -731,7 +731,8 @@ class DownloadNoteGroupModal extends Modal {
             this.listOfGroups = data;
             //this.noteGroupName = data[0].name;
             if(data.length == 0) {
-                this.contentEl.createEl("span", { text: "No note groups found" });
+                this.contentEl.createEl("span", { text: "No Note Groups Found" });
+                this.contentEl.createEl("br");
             } else {
                 this.noteGroupId = data[0].id;
 
@@ -770,7 +771,7 @@ class DownloadNoteGroupModal extends Modal {
             this.listOfFlashcardSets = data;
             //this.noteGroupName = data[0].name;
             if(data.length == 0) {
-                this.contentEl.createEl("span", { text: "No Flash Card Sets found" });
+                this.contentEl.createEl("span", { text: "No Flash Card Sets Found" });
             } else {
                 this.flashCardSetId = data[0]["FlashCardSet"].id;
 
