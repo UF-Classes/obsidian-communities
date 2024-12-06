@@ -385,6 +385,9 @@ class ContentView extends ItemView {
             const communitiesData = await communitiesResponse.json();
             this.listOfCommunities = communitiesData;
 
+            if(this.listOfCommunities.length == 0) {
+                return;
+            }
             // Render the communities in the list
             this.listOfCommunities.forEach(community => {
                 const listItem = listContainer.createEl('li');
@@ -431,11 +434,13 @@ class ContentView extends ItemView {
                         'Content-Type': 'application/json;charset=utf-8',
                         'Authorization': `Bearer ${Communities.getInstance().accToken}`
                     }}).then((res) => {
-                        if(res.status === 204) {
+                        if(res.status == 401) {
+                            new Notice("User not verified");
+                        } else if(res.status == 204) {
                             new Notice("Successfully Logged out");
                             Communities.getInstance().setEmail("Not logged in");
                             Communities.getInstance().setLoggedIn(false);
-                            this.refreshView(); // Refresh view after logout
+                            Communities.getInstance().loginStatusEl.setText(`Currently Logged in as: ${Communities.getInstance().email}`);
                         }
                     });
         });
@@ -693,12 +698,23 @@ class DownloadNoteGroupModal extends Modal {
 
     constructor(app: App, commId: string) {
         super(app);
-        this.setTitle('Download Contents:');
         this.communityId = commId;
+        this.setTitle("Download Contents: ");
         if (user.id === "") {
             this.setContent("Please login to download shared notes");
             return;
         }
+
+        new Setting(this.contentEl)
+            .setName('Invite Code')
+            .addButton((btn) =>
+                        btn
+                            .setButtonText('Copy')
+                            .setCta()
+                            .onClick(() => {
+                                navigator.clipboard.writeText(`${this.communityId}`);
+                            })
+                    );
 
         fetch(`http://127.0.0.1:8000/community/${this.communityId}/shared-notes`, {
             method: "GET",
