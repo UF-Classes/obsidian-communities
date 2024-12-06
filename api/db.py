@@ -10,6 +10,8 @@ from sqlalchemy.ext.declarative import DeclarativeMeta, declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Mapped
 from sqlalchemy.sql.annotation import Annotated
 
+from api import users
+
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
 Base: DeclarativeMeta = declarative_base()
 
@@ -78,10 +80,8 @@ class FlashCard(Base):
     def _asdict(self):  # Required to json formatting
         return {
             "id": str(self.id),
-            "user_id": str(self.user_id),
             "question": self.question,
             "answer": self.answer,
-            "flashcard_set_id": str(self.flashcard_set_id)
         }
 
 class FlashCardSet(Base):

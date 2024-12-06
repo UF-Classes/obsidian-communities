@@ -1,5 +1,7 @@
-import {Editor, MarkdownFileInfo, MarkdownView, Modal, Plugin, setIcon, Setting} from "obsidian";
+import {Editor, MarkdownFileInfo, MarkdownView, Modal, Notice, Plugin, setIcon, Setting} from "obsidian";
 import {SerializedFlashcardSet} from "./settings";
+import Communities from "./main";
+import {user} from "./globals";
 
 export class FlashcardSet {
     id: number;  // Unix time created
@@ -26,6 +28,16 @@ export class FlashcardSetModal extends Modal {
                     flashcardSet.name = value;
                     this.setTitle(`Editing Flashcard Set: ${flashcardSet.name}`);
                 });
+            });
+        new Setting(this.contentEl)
+            .setName("Share Flashcard Set")
+            .addButton((button) => {
+                button
+                    .setCta()
+                    .setIcon("share")
+                    .onClick(() => {
+                        new FlashcardsShareModal(plugin, flashcardSet).open();
+                    });
             });
         this.contentEl.createEl("h4", {text: "Flashcards"});
         this.flashcardContainerEl = this.contentEl.createEl("div", {cls: "flashcards__container"});
@@ -133,8 +145,89 @@ export class AllFlashcardsModal extends Modal {
                               Flashcards.instance.options.onSetDeleted(flashcardSet as FlashcardSet);
                           setting.settingEl.remove();
                       });
+                })
+                .addButton((button) => {
+                    button
+                        .setIcon("share")
+                        .setCta()
+                        .onClick(() => {
+                            new FlashcardsShareModal(plugin, flashcardSet as FlashcardSet).open();
+                        });
                 });
         }
+    }
+}
+
+class FlashcardsShareModal extends Modal {
+    private selectedCommunityId: string;
+
+    constructor(private plugin: Plugin, private flashcardSet: FlashcardSet) {
+        super(plugin.app);
+        this.setTitle(`Share Flashcard Set: ${flashcardSet.name}`);
+        if (user.id === "") {
+            this.setContent("Please log in to share flashcard sets.");
+            return;
+        }
+        this.setContent("Retrieving your communities...");
+        fetch(`http://127.0.0.1:8000/communities/user/${user.id}`, {
+            method: "GET",
+            headers: {
+                'Authorization': `Bearer ${user.token}`
+            },
+        }).then(res => res.json()).then((communities) => {
+            this.render(communities);
+        }).catch((err) => {
+            this.setContent("Failed to retrieve your communities. Please try again later.");
+        });
+    }
+
+    async render(communities: Array<{id: string, name: string}>) {
+        this.contentEl.empty();
+        if (communities.length == 0) {
+            this.setContent("You are not a member of any communities. Join a community to share content with them.");
+            return;
+        }
+        this.selectedCommunityId = communities[0].id;
+        new Setting(this.contentEl)
+            .setName("Select Community:")
+            .addDropdown((dropdown) => {
+                for (const community of communities) {
+                    dropdown.addOption(community.id, community.name);
+                }
+                dropdown.onChange((value) => {
+                    this.selectedCommunityId = value;
+                });
+            });
+        new Setting(this.contentEl)
+            .setName("Share Flashcard Set")
+            .addButton((button) => {
+                button
+                    .setCta()
+                    .setIcon("share")
+                    .onClick(() => {
+                        this.onSubmit();
+                    });
+            });
+    }
+
+    onSubmit() {
+        fetch(`http://127.0.0.1:8000/flashcards/upload/community/${this.flashcardSet.name}/${this.selectedCommunityId}`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${user.token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                flashcards: this.flashcardSet.flashcards,
+            }),
+        }).then((res) => {
+            if (res.status == 200) {
+                new Notice("Flashcard set shared successfully.");
+                this.close();
+            } else {
+                this.setContent("Failed to share flashcard set. Please try again later.");
+            }
+        });
     }
 }
 

@@ -521,11 +521,24 @@ async def get_specified_flashcard_set(flashcard_set_id: uuid.UUID = None, flashc
 async def get_flashcard_set_with_flashcards(flashcard_set_id: uuid.UUID):
     async with get_async_session_context() as session:
         flashcard_set = await session.get(FlashCardSet, flashcard_set_id)
+        flashcard_set_dict = flashcard_set._asdict()
+        flashcard_set_dict["email"] = (await get_user_by_id(flashcard_set.user_id)).email
         flashcards = await get_all_flashcards_from_set_id(flashcard_set_id)
+
         return {
-            "FlashCardSet": flashcard_set._asdict(),
-            "FlashCards": flashcards
+            "FlashCardSet": flashcard_set_dict,
+            "FlashCards": flashcards,
         }
+
+async def get_flashcard_set_by_name_id(flashcard_set_id: uuid.UUID, user_id: uuid.UUID):
+    async with get_async_session_context() as session:
+        flashcard_set = await session.execute(
+            select(FlashCardSet).filter_by(id=flashcard_set_id, user_id=user_id)
+        )
+        flashcard_set = flashcard_set.scalar_one_or_none()
+        if not flashcard_set:
+            return {"error": "Flashcard set not found"}
+        return await get_flashcard_set_with_flashcards(flashcard_set.id)
 
 
 # ------------------------------------------------------ IO ------------------------------------------------------
